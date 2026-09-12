@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="직무 근거와 실제 답변 데이터를 바탕으로 면접 연습을 돕는 Overlap 인터뷰 코치 MVP" />
+    <title>Overlap Interview Lab</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Overlap Interview Lab 홈">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+          <span>OVERLAP <b>INTERVIEW LAB</b></span>
+        </a>
+        <div class="topbar-meta">
+          <span class="privacy-note">영상은 이 기기에만 머뭅니다</span>
+          <span class="session-id">SESSION 01</span>
+        </div>
+      </header>
+
+      <main>
+        <section id="practice-view" class="practice-layout" aria-labelledby="practice-title">
+          <aside class="brief-panel">
+            <div class="eyebrow">INTERVIEW BRIEF</div>
+            <h1 id="practice-title">답변을 시작하기 전에<br />평가 기준을 확인하세요.</h1>
+
+            <label class="field-label" for="role-select">지원 직무</label>
+            <div class="select-wrap">
+              <select id="role-select">
+                <option value="data">데이터 분석가</option>
+                <option value="pm">서비스 기획 · PM</option>
+                <option value="marketing">퍼포먼스 마케터</option>
+              </select>
+            </div>
+
+            <div class="signal-card">
+              <span class="signal-index">01</span>
+              <div>
+                <p>이번 질문의 핵심 신호</p>
+                <strong id="signal-title">문제 정의 · 분석 과정 · 사업적 영향</strong>
+              </div>
+            </div>
+
+            <div class="evidence-block">
+              <p class="field-label">평가 근거</p>
+              <ul id="rubric-list">
+                <li><span>01</span> 문제와 목표를 구분해 설명했는가</li>
+                <li><span>02</span> 본인의 판단과 행동이 드러나는가</li>
+                <li><span>03</span> 결과를 수치나 변화로 입증했는가</li>
+              </ul>
+            </div>
+
+            <div class="boundary-note">
+              <span aria-hidden="true">◇</span>
+              <p><strong>초기 MVP 분석</strong>음성 전달 습관과 답변 구조를 점검합니다. 표정·시선은 채용 적합도 판단에 사용하지 않습니다.</p>
+            </div>
+          </aside>
+
+          <section class="stage-panel">
+            <div class="question-row">
+              <div>
+                <span class="question-count">QUESTION <b id="question-number">1</b> / 3</span>
+                <h2 id="question-text">데이터로 문제를 정의하고 해결했던 경험을 설명해 주세요.</h2>
+              </div>
+              <button id="next-question" class="icon-button" type="button" aria-label="다음 질문">→</button>
+            </div>
+
+            <div class="camera-frame" id="camera-frame">
+              <video id="camera" autoplay muted playsinline></video>
+              <div id="camera-placeholder" class="camera-placeholder">
+                <div class="lens" aria-hidden="true"><span></span></div>
+                <p>카메라와 마이크를 연결하면<br />실제 답변 데이터로 분석합니다.</p>
+                <button id="enable-camera" class="secondary-button" type="button">카메라 연결</button>
+              </div>
+              <div class="frame-guide" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              <div class="recording-badge" id="recording-badge"><span></span> REC</div>
+              <div class="timer" id="timer">00:00</div>
+              <div class="live-caption" id="live-caption" aria-live="polite"></div>
+            </div>
+
+            <div class="control-dock">
+              <div class="device-state"><span id="device-dot"></span><b id="device-label">장치 연결 전</b></div>
+              <button id="record-button" class="record-button" type="button" disabled>
+                <span class="record-icon"></span>
+                <span id="record-label">답변 녹화 시작</span>
+              </button>
+              <button id="finish-button" class="finish-button" type="button" disabled>분석 보기 <span>↗</span></button>
+            </div>
+          </section>
+        </section>
+
+        <section id="result-view" class="result-view" hidden aria-labelledby="result-title">
+          <div class="result-heading">
+            <div>
+              <span class="eyebrow">ANSWER REVIEW</span>
+              <h1 id="result-title">좋았던 근거는 남기고,<br />다음 답변은 더 선명하게.</h1>
+            </div>
+            <button id="retry-button" class="secondary-button" type="button">다시 연습하기</button>
+          </div>
+
+          <div class="result-grid">
+            <section class="score-card">
+              <div class="score-top"><span>답변 완성도</span><b id="total-score">—</b></div>
+              <div class="score-track"><i id="score-fill"></i></div>
+              <p>합격 가능성이 아닌, 현재 답변이 평가 기준을 얼마나 명확히 보여줬는지 나타냅니다.</p>
+            </section>
+
+            <section class="metrics-card" aria-label="전달 지표">
+              <article><span>말하기 속도</span><b id="pace-value">—</b><small id="pace-note">분석 대기</small></article>
+              <article><span>긴 침묵</span><b id="pause-value">—</b><small>1.5초 이상</small></article>
+              <article><span>습관어</span><b id="filler-value">—</b><small>음, 어, 약간 등</small></article>
+              <article><span>목소리 변화</span><b id="voice-value">—</b><small id="voice-note">분석 대기</small></article>
+            </section>
+
+            <section class="transcript-card">
+              <div class="card-heading">
+                <div><span class="eyebrow">TRANSCRIPT</span><h2>내 답변</h2></div>
+                <span id="transcript-source" class="source-badge">직접 입력</span>
+              </div>
+              <label class="sr-only" for="transcript-input">답변 텍스트</label>
+              <textarea id="transcript-input" placeholder="자동 전사가 지원되지 않으면 여기에 답변을 붙여 넣으세요."></textarea>
+              <button id="reanalyze-button" class="text-button" type="button">텍스트 다시 분석 →</button>
+            </section>
+
+            <section class="feedback-card">
+              <div class="card-heading"><div><span class="eyebrow">EVIDENCE REVIEW</span><h2>근거 기반 피드백</h2></div></div>
+              <div id="feedback-list" class="feedback-list"></div>
+            </section>
+          </div>
+
+          <div class="expert-boundary">
+            <div class="expert-icon" aria-hidden="true">!</div>
+            <div>
+              <h2>전문가 검증이 필요한 영역</h2>
+              <p>현재 결과는 연습 보조용입니다. 직무별 평가 루브릭은 현업 면접관·산업심리 전문가의 검토가, 시선·자세 분석은 컴퓨터 비전 전문가와 편향·접근성 검증이 필요합니다.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
