@@ -43,6 +43,7 @@ select { width: 100%; appearance: none; padding: 13px 42px 13px 15px; background
 .signal-index { font-family: ui-monospace, monospace; font-size: .75rem; opacity: .7; }
 .signal-card p { margin: 0 0 6px; font-size: .75rem; font-weight: 700; }
 .signal-card strong { display: block; line-height: 1.4; }
+.job-context-status { margin: 12px 0 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
 .evidence-block { margin-top: 34px; }
 .evidence-block ul { list-style: none; padding: 0; margin: 0; }
 .evidence-block li { padding: 12px 0; border-top: 1px solid var(--line); color: #cbd5d9; font-size: .9rem; line-height: 1.45; }

@@ -33,6 +33,8 @@ python3 -m http.server 4173 --directory dist
 
 상용화 전에는 `docs/MVP_SCOPE.md`의 전문가 검증 항목을 반드시 확인해야 합니다.
 
+채용공고 크롤링 팀과의 연동 계약 및 직무 AI 페르소나 설계는 `docs/JD_API_AND_PERSONA.md`에 정리했습니다.
+
 ## Whisper 전사 방식
 
 Whisper 모델은 최초 실행 시 브라우저에 내려받아 캐시한 뒤, 녹화된 오디오를 기기 안에서 전사합니다. 따라서 OpenAI API 키나 Chrome의 음성 인식 기능은 사용하지 않습니다. 첫 실행은 모델 다운로드와 기기 성능에 따라 시간이 걸릴 수 있으며, 전사 품질과 처리 시간은 향후 더 큰 모델 또는 서버형 STT를 비교 검증해야 합니다.

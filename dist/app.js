@@ -47,8 +47,23 @@ const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
   transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, whisperWorker: null, transcribing: false,
-  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: ""
+  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null
 };
+
+async function loadJobContext() {
+  const postingId = new URLSearchParams(window.location.search).get("postingId");
+  if (!postingId || !window.JobContextAPI) return;
+
+  $("job-context-status").textContent = "선택한 채용공고 정보를 불러오는 중";
+  try {
+    state.jobContext = await window.JobContextAPI.get(postingId);
+    const { companyName, positionTitle, deadline } = state.jobContext;
+    $("job-context-status").textContent = `${companyName} · ${positionTitle}${deadline ? ` · 마감 ${deadline}` : ""}`;
+  } catch (error) {
+    $("job-context-status").textContent = "채용공고 정보를 불러오지 못해 데모 직무 루브릭을 사용합니다.";
+    console.error(error);
+  }
+}
 
 function updateRole() {
   const data = roleData[$("role-select").value];
@@ -378,6 +393,7 @@ $("submit-followup").addEventListener("click", () => {
   analyze();
 });
 updateRole();
+loadJobContext();
 
 function registerWebMcp() {
   const context = document.modelContext;
