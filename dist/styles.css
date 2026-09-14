@@ -100,7 +100,7 @@ select { width: 100%; appearance: none; padding: 13px 42px 13px 15px; background
 .result-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 34px; }
 .result-heading h1 { margin-bottom: 0; }
 .result-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 16px; }
-.score-card, .metrics-card, .transcript-card, .feedback-card, .rubric-card, .followup-card, .expert-boundary { border: 1px solid var(--line); background: var(--panel); padding: 26px; }
+.score-card, .metrics-card, .recording-card, .transcript-card, .feedback-card, .rubric-card, .followup-card, .expert-boundary { border: 1px solid var(--line); background: var(--panel); padding: 26px; }
 .score-card { background: var(--signal); color: #210a05; }
 .score-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .score-top span { font-weight: 800; }
@@ -112,6 +112,9 @@ select { width: 100%; appearance: none; padding: 13px 42px 13px 15px; background
 .metrics-card article { background: var(--panel); padding: 22px 18px; }
 .metrics-card span, .metrics-card small { display: block; color: var(--muted); font-size: .75rem; }
 .metrics-card b { display: block; margin: 13px 0 8px; font: 700 1.45rem/1 ui-monospace, monospace; }
+.recording-card { grid-column: 1 / -1; }
+.recording-card video { width: 100%; max-height: min(62vh, 680px); display: block; background: #050a0e; object-fit: contain; }
+.recording-card .card-intro { margin: 14px 0 0; }
 .transcript-card, .feedback-card { min-height: 390px; }
 .card-heading { display: flex; justify-content: space-between; align-items: start; margin-bottom: 18px; }
 .card-heading h2 { margin: 7px 0 0; font-size: 1.4rem; }

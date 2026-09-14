@@ -46,7 +46,7 @@ const roleData = {
 const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
-  transcript: "", audioContext: null, analyser: null, recordedBlob: null, whisperWorker: null, transcribing: false,
+  transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, whisperWorker: null, transcribing: false,
   audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: ""
 };
 
@@ -170,6 +170,10 @@ function startSampling() {
 }
 
 function startRecording() {
+  if (state.recordingUrl) {
+    URL.revokeObjectURL(state.recordingUrl);
+    state.recordingUrl = null;
+  }
   state.chunks = [];
   state.transcript = "";
   state.followupText = "";
@@ -178,6 +182,7 @@ function startRecording() {
   state.recorder.ondataavailable = (event) => { if (event.data.size) state.chunks.push(event.data); };
   state.recorder.onstop = () => {
     state.recordedBlob = new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" });
+    state.recordingUrl = URL.createObjectURL(state.recordedBlob);
     transcribeWithWhisper(state.recordedBlob);
   };
   state.recorder.start();
@@ -323,6 +328,15 @@ function feedbackItem(label, title, body, type) {
 function showResults() {
   $("practice-view").hidden = true;
   $("result-view").hidden = false;
+  const playback = $("recording-playback");
+  const recordingCard = $("recording-card");
+  if (state.recordingUrl) {
+    playback.src = state.recordingUrl;
+    recordingCard.hidden = false;
+  } else {
+    playback.removeAttribute("src");
+    recordingCard.hidden = true;
+  }
   if (!state.transcript) $("transcript-input").value = "";
   analyze();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -336,6 +350,13 @@ function resetPractice() {
   $("finish-button").disabled = true;
   $("transcript-input").value = "";
   $("followup-input").value = "";
+  $("recording-playback").pause();
+  $("recording-playback").removeAttribute("src");
+  $("recording-playback").load();
+  $("recording-card").hidden = true;
+  if (state.recordingUrl) URL.revokeObjectURL(state.recordingUrl);
+  state.recordingUrl = null;
+  state.recordedBlob = null;
   state.followupText = "";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

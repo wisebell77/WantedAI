@@ -7,7 +7,7 @@ async function getTranscriber() {
   env.allowLocalModels = false;
   transcriber = await pipeline(
     "automatic-speech-recognition",
-    "Xenova/whisper-tiny",
+    "Xenova/whisper-small",
     {
       progress_callback: (progress) => self.postMessage({ type: "progress", progress })
     }
