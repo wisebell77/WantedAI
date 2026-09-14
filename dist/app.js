@@ -6,7 +6,11 @@ const roleData = {
       "분석 결과가 예상과 달랐을 때 어떻게 검증했나요?",
       "이해관계자에게 복잡한 분석을 설득력 있게 전달한 경험이 있나요?"
     ],
-    rubric: ["문제와 목표를 구분해 설명했는가", "본인의 분석 판단과 행동이 드러나는가", "결과를 수치나 변화로 입증했는가"],
+    rubric: [
+      { label: "문제·목표 정의", checks: [/(문제|이탈|상황|과제)/, /(목표|지표|정확도|전환율|비율)/, /(사용자|사업|고객|서비스|매출)/], followup: "문제의 영향을 무엇으로 판단했고, 왜 그 지표를 목표로 삼았는지 설명해 주세요." },
+      { label: "분석 판단", checks: [/(제가|저는|직접|담당)/, /(가설|분석|검증|비교|쿼리|모델)/, /(선택|판단|결정|기준|이유)/], followup: "여러 분석 방법 중 어떤 기준으로 현재 방법을 선택했고, 다른 가능성은 어떻게 검증했나요?" },
+      { label: "결과·회고", checks: [/(결과|성과|개선|증가|감소|달성)/, /\d|퍼센트|배|명|건/, /(배웠|한계|다음|보완|회고)/], followup: "결과를 보여주는 수치와, 그 결과가 기대와 달랐을 때 얻은 배움을 함께 설명해 주세요." }
+    ],
     keywords: ["데이터", "분석", "가설", "검증", "지표", "결과"]
   },
   pm: {
@@ -16,7 +20,11 @@ const roleData = {
       "제한된 자원 안에서 우선순위를 정했던 기준은 무엇인가요?",
       "개발자·디자이너와 의견이 달랐을 때 어떻게 합의했나요?"
     ],
-    rubric: ["사용자 문제와 맥락이 구체적인가", "우선순위 기준과 본인의 판단이 드러나는가", "협업 결과나 학습을 근거로 제시했는가"],
+    rubric: [
+      { label: "사용자 문제", checks: [/(사용자|고객|페르소나|인터뷰)/, /(문제|불편|이탈|요구)/, /(상황|당시|맥락|과제)/], followup: "사용자가 실제로 겪은 문제를 어떤 근거로 확인했고, 왜 중요한 문제라고 판단했나요?" },
+      { label: "우선순위 판단", checks: [/(제가|저는|직접|담당)/, /(우선순위|기준|결정|선택|트레이드오프)/, /(가설|데이터|요구사항|검증)/], followup: "제한된 시간이나 자원 안에서 무엇을 포기하고 무엇을 우선했는지, 그 기준을 설명해 주세요." },
+      { label: "협업 결과", checks: [/(개발|디자인|팀원|이해관계자|협업)/, /(결과|성과|개선|출시|반영)/, /(배웠|한계|다음|보완|회고)/], followup: "협업 과정에서 의견 차이를 어떻게 조율했고, 그 결정이 결과에 어떤 영향을 줬나요?" }
+    ],
     keywords: ["사용자", "문제", "우선순위", "요구사항", "협업", "결과"]
   },
   marketing: {
@@ -26,7 +34,11 @@ const roleData = {
       "성과가 낮았던 캠페인의 원인을 어떻게 찾아냈나요?",
       "브랜드 목표와 단기 성과가 충돌할 때 무엇을 우선하겠습니까?"
     ],
-    rubric: ["목표 고객과 과제가 명확한가", "실험 또는 실행 과정에서 본인의 역할이 드러나는가", "전환율 등 성과 지표로 결과를 설명했는가"],
+    rubric: [
+      { label: "고객·과제 정의", checks: [/(고객|타깃|타겟|잠재고객|세그먼트)/, /(문제|과제|목표|인지|전환)/, /(상황|당시|시장|캠페인)/], followup: "누구를 대상으로 한 과제였고, 그 고객에게 어떤 변화를 만들고자 했는지 설명해 주세요." },
+      { label: "실험·실행 판단", checks: [/(제가|저는|직접|담당)/, /(실험|가설|캠페인|소재|채널|분석)/, /(선택|판단|결정|기준|비교)/], followup: "실험한 변수와 성공 기준은 무엇이었으며, 그 기준을 선택한 이유는 무엇인가요?" },
+      { label: "성과·회고", checks: [/(결과|성과|개선|증가|감소|전환)/, /\d|퍼센트|배|명|건/, /(배웠|한계|다음|보완|회고)/], followup: "성과 수치가 단순 노출이 아니라 실제 목표 달성으로 이어졌는지 어떻게 해석했나요?" }
+    ],
     keywords: ["고객", "캠페인", "실험", "전환", "성과", "지표"]
   }
 };
@@ -35,7 +47,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
   recognition: null, transcript: "", finalTranscript: "", audioContext: null, analyser: null,
-  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1
+  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: ""
 };
 
 function updateRole() {
@@ -43,7 +55,7 @@ function updateRole() {
   $("signal-title").textContent = data.signal;
   $("question-text").textContent = data.questions[state.question];
   $("question-number").textContent = state.question + 1;
-  $("rubric-list").innerHTML = data.rubric.map((item, i) => `<li><span>0${i + 1}</span>${item}</li>`).join("");
+  $("rubric-list").innerHTML = data.rubric.map((item, i) => `<li><span>0${i + 1}</span>${item.label}</li>`).join("");
 }
 
 async function enableCamera() {
@@ -115,6 +127,7 @@ function startRecording() {
   state.chunks = [];
   state.transcript = "";
   state.finalTranscript = "";
+  state.followupText = "";
   state.recorder = new MediaRecorder(state.stream);
   state.recorder.ondataavailable = (event) => { if (event.data.size) state.chunks.push(event.data); };
   state.recorder.start();
@@ -154,8 +167,9 @@ function updateTimer() {
 }
 
 function analyze() {
-  const text = $("transcript-input").value.trim() || state.transcript.trim();
-  if (!$("transcript-input").value) $("transcript-input").value = text;
+  const baseText = $("transcript-input").value.trim() || state.transcript.trim();
+  if (!$("transcript-input").value) $("transcript-input").value = baseText;
+  const text = [baseText, state.followupText].filter(Boolean).join("\n");
   const duration = state.duration;
   const compact = text.replace(/\s/g, "");
   const pace = Math.round((compact.length / duration) * 60);
@@ -163,8 +177,8 @@ function analyze() {
   const fillers = text.match(fillerPattern) || [];
   const data = roleData[$("role-select").value];
   const keywordHits = data.keywords.filter((word) => text.includes(word));
-  const structureSignals = [/(상황|당시|문제)/.test(text), /(목표|과제)/.test(text), /(제가|저는|진행|분석|실행|결정)/.test(text), /(결과|성과|개선|증가|감소|배웠)/.test(text)];
-  const structureScore = structureSignals.filter(Boolean).length;
+  const rubricResults = data.rubric.map((item) => evaluateRubric(item, text));
+  const rubricTotal = rubricResults.reduce((total, item) => total + item.score, 0);
   const hasNumber = /\d|퍼센트|배|명|건/.test(text);
   const volumeValues = state.audioSamples.filter((v) => v >= 0.018);
   const volumeMean = volumeValues.reduce((a, b) => a + b, 0) / Math.max(1, volumeValues.length);
@@ -172,7 +186,7 @@ function analyze() {
   const voiceVariation = Math.sqrt(volumeVariance);
   const textAvailable = compact.length > 0;
   const paceHealthy = pace >= 250 && pace <= 420;
-  const score = textAvailable ? Math.min(92, 38 + structureScore * 9 + keywordHits.length * 3 + (hasNumber ? 8 : 0) + (paceHealthy ? 5 : 0) - Math.min(8, fillers.length * 2)) : 24;
+  const score = textAvailable ? Math.min(95, Math.max(15, Math.round(18 + (rubricTotal / 9) * 70 + (paceHealthy ? 5 : 0) - Math.min(8, fillers.length * 2)))) : 0;
 
   $("total-score").textContent = `${score}`;
   $("score-fill").style.width = `${score}%`;
@@ -183,16 +197,21 @@ function analyze() {
   $("voice-value").textContent = volumeValues.length ? (voiceVariation > .025 ? "충분" : "낮음") : "—";
   $("voice-note").textContent = volumeValues.length ? "음량 변화 기준" : "음성 데이터 없음";
   $("transcript-source").textContent = state.transcript ? "브라우저 자동 전사" : "직접 입력";
+  renderRubricMap(rubricResults);
 
   const strengths = [];
-  if (structureScore >= 3) strengths.push(["구조", "답변의 상황·행동·결과 흐름이 확인됩니다."]);
+  rubricResults.filter((item) => item.score >= 2).forEach((item) => {
+    strengths.push([item.label, `${item.evidence[0] || "답변 근거"}가 확인됩니다.`]);
+  });
   if (keywordHits.length) strengths.push(["직무 연결", `‘${keywordHits.slice(0, 3).join(" · ")}’ 근거가 직무 평가 기준과 연결됩니다.`]);
-  if (hasNumber) strengths.push(["결과 근거", "수치나 규모가 포함되어 결과를 구체적으로 전달했습니다."]);
+  if (hasNumber && !strengths.some(([title]) => title === "결과·회고")) strengths.push(["결과 근거", "수치나 규모가 포함되어 결과를 구체적으로 전달했습니다."]);
   if (!strengths.length) strengths.push(["시작점", "답변 내용이 아직 짧습니다. 경험의 상황과 본인의 행동부터 한 문장씩 추가해 보세요."]);
 
   const improvements = [];
-  if (structureScore < 3) improvements.push(["답변 구조", "상황 → 내가 맡은 목표 → 구체적 행동 → 결과 순서로 다시 말해 보세요."]);
-  if (!hasNumber) improvements.push(["근거", "결과에 기간, 규모, 전후 변화 중 하나를 덧붙이면 판단 근거가 선명해집니다."]);
+  rubricResults.filter((item) => item.score < 2).forEach((item) => {
+    improvements.push([item.label, item.missing]);
+  });
+  if (!hasNumber && !improvements.some(([title]) => title === "결과·회고")) improvements.push(["근거", "결과에 기간, 규모, 전후 변화 중 하나를 덧붙이면 판단 근거가 선명해집니다."]);
   if (!keywordHits.length) improvements.push(["직무 연결", `이번 질문의 핵심인 ${data.signal} 중 하나를 실제 행동과 연결해 보세요.`]);
   if (fillers.length >= 3) improvements.push(["전달 습관", `습관어가 ${fillers.length}회 감지됐습니다. 문장 사이에 짧게 멈추는 편이 더 또렷합니다.`]);
   if (state.silenceRuns.length >= 2) improvements.push(["침묵", `1.5초 이상의 침묵이 ${state.silenceRuns.length}회 있었습니다. 첫 문장을 미리 정해 두면 시작이 안정됩니다.`]);
@@ -202,10 +221,53 @@ function analyze() {
     ...strengths.slice(0, 2).map(([title, body]) => feedbackItem("잘 드러난 점", title, body, "good")),
     ...improvements.slice(0, 3).map(([title, body]) => feedbackItem("보완할 점", title, body, "improve"))
   ].join("");
+
+  const followupTarget = [...rubricResults].sort((a, b) => a.score - b.score)[0];
+  renderFollowup(followupTarget, Boolean(state.followupText));
+}
+
+function evaluateRubric(item, text) {
+  const evidence = item.checks.map((pattern) => findEvidence(text, pattern)).filter(Boolean);
+  const score = evidence.length;
+  const missing = score === 0
+    ? `현재 답변에서 ${item.label}의 근거를 찾지 못했습니다. ${item.followup}`
+    : score === 1
+      ? `${item.label}에 대한 단서가 하나 있습니다. 행동 또는 결과를 더해 근거를 완성해 보세요.`
+      : `${item.label}의 근거가 더 선명해지도록 판단 이유나 회고를 한 문장 덧붙여 보세요.`;
+  return { ...item, score, evidence, missing };
+}
+
+function findEvidence(text, pattern) {
+  const sentences = text.split(/(?:[.!?]|다\.|요\.)\s*|\n+/).map((sentence) => sentence.trim()).filter(Boolean);
+  return sentences.find((sentence) => pattern.test(sentence)) || "";
+}
+
+function renderRubricMap(items) {
+  $("rubric-map").innerHTML = items.map((item) => {
+    const evidence = item.evidence.length ? item.evidence.slice(0, 2).map((line) => `“${escapeHtml(line)}”`).join(" · ") : "아직 확인된 근거 없음";
+    return `<article class="rubric-item"><div class="rubric-item-head"><h3>${escapeHtml(item.label)}</h3><b class="rubric-score">${item.score}/3</b></div><div class="rubric-scale"><i style="width:${item.score * 33.333}%"></i></div><p class="rubric-evidence"><b>답변 근거</b><br>${evidence}</p></article>`;
+  }).join("");
+}
+
+function renderFollowup(item, answered) {
+  const input = $("followup-input");
+  const button = $("submit-followup");
+  $("followup-context").textContent = item
+    ? `${item.label} 항목을 더 확인하고 싶어요. ${item.followup}`
+    : "답변에서 더 확인할 근거를 고르고 있어요.";
+  $("followup-status").textContent = answered ? "후속 답변 반영됨" : "답변 대기";
+  input.value = state.followupText;
+  input.disabled = answered;
+  button.disabled = answered;
+  button.textContent = answered ? "후속 답변이 평가에 반영되었습니다" : "후속 답변 반영하기 →";
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 }
 
 function feedbackItem(label, title, body, type) {
-  return `<article class="feedback-item ${type}"><span>${label}</span><div><strong>${title}</strong><p>${body}</p></div></article>`;
+  return `<article class="feedback-item ${type}"><span>${escapeHtml(label)}</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(body)}</p></div></article>`;
 }
 
 function showResults() {
@@ -222,16 +284,28 @@ function resetPractice() {
   $("timer").textContent = "00:00";
   $("live-caption").textContent = "";
   $("finish-button").disabled = true;
+  $("transcript-input").value = "";
+  $("followup-input").value = "";
+  state.followupText = "";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-$("role-select").addEventListener("change", () => { state.question = 0; updateRole(); });
+$("role-select").addEventListener("change", () => { state.question = 0; state.followupText = ""; updateRole(); });
 $("next-question").addEventListener("click", () => { state.question = (state.question + 1) % 3; updateRole(); });
 $("enable-camera").addEventListener("click", enableCamera);
 $("record-button").addEventListener("click", () => state.recording ? stopRecording() : startRecording());
 $("finish-button").addEventListener("click", showResults);
 $("retry-button").addEventListener("click", resetPractice);
 $("reanalyze-button").addEventListener("click", analyze);
+$("submit-followup").addEventListener("click", () => {
+  const answer = $("followup-input").value.trim();
+  if (!answer) {
+    $("followup-input").focus();
+    return;
+  }
+  state.followupText = answer;
+  analyze();
+});
 updateRole();
 
 function registerWebMcp() {

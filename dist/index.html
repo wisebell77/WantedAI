@@ -128,6 +128,23 @@
               <div class="card-heading"><div><span class="eyebrow">EVIDENCE REVIEW</span><h2>근거 기반 피드백</h2></div></div>
               <div id="feedback-list" class="feedback-list"></div>
             </section>
+
+            <section class="rubric-card">
+              <div class="card-heading">
+                <div><span class="eyebrow">RUBRIC MAP</span><h2>항목별 답변 근거</h2></div>
+                <span class="source-badge">MVP 규칙 기반</span>
+              </div>
+              <p class="card-intro">점수는 합격 가능성이 아니라, 현재 답변에서 각 평가 항목의 근거가 얼마나 확인되는지를 나타냅니다.</p>
+              <div id="rubric-map" class="rubric-map"></div>
+            </section>
+
+            <section id="followup-card" class="followup-card">
+              <div class="card-heading"><div><span class="eyebrow">FOLLOW-UP</span><h2>한 가지를 더 물어볼게요</h2></div><span id="followup-status" class="source-badge">답변 대기</span></div>
+              <p id="followup-context" class="followup-context"></p>
+              <label class="sr-only" for="followup-input">꼬리질문 답변</label>
+              <textarea id="followup-input" class="followup-input" placeholder="꼬리질문에 답하면 최초 답변과 함께 다시 평가합니다."></textarea>
+              <button id="submit-followup" class="followup-button" type="button">후속 답변 반영하기 →</button>
+            </section>
           </div>
 
           <div class="expert-boundary">
