@@ -340,6 +340,33 @@ function feedbackItem(label, title, body, type) {
   return `<article class="feedback-item ${type}"><span>${escapeHtml(label)}</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(body)}</p></div></article>`;
 }
 
+async function requestAgentFeedback() {
+  const transcript = $("transcript-input").value.trim() || state.transcript.trim();
+  if (!transcript) return;
+  const button = $("agent-feedback-button");
+  button.disabled = true;
+  $("agent-feedback-status").textContent = "직무 AI 코치가 선택 공고와 답변 근거를 확인하고 있습니다.";
+  try {
+    const data = roleData[$("role-select").value];
+    const result = await window.CareerCoachAPI.evaluateInterview({
+      postingId: state.jobContext?.postingId || null,
+      jobFamily: $("role-select").value,
+      question: $("question-text").textContent,
+      transcript,
+      rubric: data.rubric.map(({ label, followup }) => ({ label, followup })),
+      deliveryMetrics: { durationSeconds: state.duration, longPauses: state.silenceRuns.length }
+    });
+    $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, item.body, item.type)).join("");
+    if (result.followupQuestion) $("followup-context").textContent = result.followupQuestion;
+    $("agent-feedback-status").textContent = "직무 AI 코치 피드백이 반영됐습니다.";
+  } catch (error) {
+    $("agent-feedback-status").textContent = "AI 코치 서버가 아직 연결되지 않아 MVP 규칙 기반 피드백을 유지합니다.";
+    console.error(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function showResults() {
   $("practice-view").hidden = true;
   $("result-view").hidden = false;
@@ -383,6 +410,7 @@ $("record-button").addEventListener("click", () => state.recording ? stopRecordi
 $("finish-button").addEventListener("click", showResults);
 $("retry-button").addEventListener("click", resetPractice);
 $("reanalyze-button").addEventListener("click", analyze);
+$("agent-feedback-button").addEventListener("click", requestAgentFeedback);
 $("submit-followup").addEventListener("click", () => {
   const answer = $("followup-input").value.trim();
   if (!answer) {

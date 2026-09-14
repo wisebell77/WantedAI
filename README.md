@@ -4,13 +4,15 @@
 
 ## 실행
 
-정적 파일 서버로 `dist` 폴더를 실행하세요. 카메라와 마이크는 `localhost` 또는 HTTPS 환경에서만 정상적으로 권한을 요청합니다.
+실제 수집 JD API와 Agent API를 함께 실행하려면 프로젝트 루트에서 다음 명령을 실행하세요. 카메라와 마이크는 `localhost` 또는 HTTPS 환경에서만 정상적으로 권한을 요청합니다.
 
 ```bash
-python3 -m http.server 4173 --directory dist
+cp .env.example .env
+# .env에 UPSTAGE_API_KEY 입력
+npm run dev
 ```
 
-그다음 브라우저에서 `http://localhost:4173`을 엽니다.
+그다음 브라우저에서 `http://127.0.0.1:4173`을 엽니다. 루트는 AI 커리어 코치이며 화상 면접 화면은 `/index.html`입니다.
 
 ## 현재 구현 범위
 
@@ -23,6 +25,15 @@ python3 -m http.server 4173 --directory dist
 - 직무별 3개 루브릭의 답변 근거 지도와 항목별 0~3점 표시
 - 가장 부족한 항목을 대상으로 한 꼬리질문과 후속 답변 재평가
 - Whisper 전사 실패 또는 수정이 필요할 때 직접 입력 후 재분석
+- `Overlap_데이터_20260911`의 실제 수집 데이터 기반 직무/JD 선택 API
+- Upstage Solar 기반 직무 상담, 자소서 시작 가이드, 타임라인·할 일 생성
+- 할 일 완료 상태와 사용자 준비 상태의 브라우저 로컬 저장
+
+## Agent 모델 라우팅
+
+- `solar-mini`: 지원 타임라인, 이번 주 할 일, JD 태깅처럼 정형화된 저비용 작업
+- `solar-pro4`: 자소서 시작 가이드, 직무 상담, 면접 평가처럼 맥락 품질이 중요한 작업
+- 두 모델은 같은 `UPSTAGE_API_KEY`를 사용하며, 키는 로컬 Agent 서버에서만 읽습니다.
 
 ## 의도적으로 제외한 범위
 

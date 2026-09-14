@@ -1,0 +1,7 @@
+{
+  "name": "overlap-career-coach-mvp",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "node server/local-server.mjs" }
+}
+

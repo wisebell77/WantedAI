@@ -79,6 +79,32 @@ Agent는 매 요청에서 필요한 컨텍스트만 조합한다. 예를 들어 
 
 LLM이 호출되더라도 JSON으로만 반환하게 한다.
 
+## Upstage Agent API 계약
+
+프론트는 API 키 없이 다음 엔드포인트를 호출한다.
+
+```http
+POST /api/v1/agent/chat
+Content-Type: application/json
+```
+
+백엔드는 API 키 하나와 두 모델 설정을 사용한다.
+
+```env
+UPSTAGE_API_KEY=...
+UPSTAGE_FAST_MODEL=solar-mini
+UPSTAGE_COACH_MODEL=solar-pro4
+```
+
+프론트에는 `OVERLAP_AGENT_API_BASE_URL`만 둘 수 있으며, API 키는 절대 넣지 않는다.
+
+요청에는 `postingId`, 작업 모드, 사용자 질문, 경험·준비 상태, 현재 할 일이 들어간다. 백엔드는 `postingId`로 JD API를 다시 조회해 신뢰 가능한 기업별 컨텍스트를 추가한 뒤 Upstage에 전달한다. 클라이언트가 보낸 JD 원문만 신뢰하면 안 된다.
+
+| Agent 작업 | 호출 함수 | 모델 |
+| --- | --- | --- |
+| JD 요구역량 태깅, 할 일 분류·우선순위, 타임라인 문장화 | `runFastAgentTask` | `solar-mini` |
+| 자소서 첨삭, 직무 상담, 면접 답변 평가, 꼬리질문 | `evaluateInterviewWithUpstage` | `solar-pro4` |
+
 ```json
 {
   "evidence": [{"rubricId": "analysis_judgment", "quote": "...", "confidence": "high"}],

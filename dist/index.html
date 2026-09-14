@@ -10,13 +10,13 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="#" aria-label="Overlap Interview Lab 홈">
+        <a class="brand" href="./coach.html" aria-label="Overlap AI 커리어 코치 홈">
           <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
           <span>OVERLAP <b>INTERVIEW LAB</b></span>
         </a>
         <div class="topbar-meta">
           <span class="privacy-note">Whisper 전사는 이 기기에서 처리됩니다</span>
-          <span class="session-id">SESSION 01</span>
+          <a class="session-id" href="./coach.html">AI 커리어 코치 →</a>
         </div>
       </header>
 
@@ -137,6 +137,8 @@
             <section class="feedback-card">
               <div class="card-heading"><div><span class="eyebrow">EVIDENCE REVIEW</span><h2>근거 기반 피드백</h2></div></div>
               <div id="feedback-list" class="feedback-list"></div>
+              <button id="agent-feedback-button" class="text-button" type="button">AI 코치 피드백 받기 →</button>
+              <p id="agent-feedback-status" class="agent-feedback-status" aria-live="polite"></p>
             </section>
 
             <section class="rubric-card">
@@ -168,6 +170,7 @@
       </main>
     </div>
     <script src="./job-context-api.js"></script>
+    <script src="./agent-api.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
