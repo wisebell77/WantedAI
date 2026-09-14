@@ -1,0 +1,29 @@
+# 인증키 — 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+
+# 데이터 — 용량이 크고(수천 건의 HWP·PDF) 파이프라인으로 재현된다
+data/
+!data/.gitkeep
+!data/ext_nodes_manual.json      # 사람이 관리하는 차단·별칭·상위연결 목록은 코드에 가깝다
+
+# 파이썬
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# 모델·캐시
+*.npz
+.cache/
+models/
+
+# 편집기·OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
