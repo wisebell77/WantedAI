@@ -46,7 +46,7 @@ const roleData = {
 const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
-  recognition: null, transcript: "", finalTranscript: "", audioContext: null, analyser: null,
+  transcript: "", audioContext: null, analyser: null, recordedBlob: null, whisperWorker: null, transcribing: false,
   audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: ""
 };
 
@@ -70,6 +70,7 @@ async function enableCamera() {
     $("device-label").textContent = "카메라 · 마이크 연결됨";
     $("device-label").parentElement.classList.add("connected");
     setupAudioMeter();
+    setupWhisper();
   } catch (error) {
     $("camera-placeholder").querySelector("p").textContent = "권한을 확인할 수 없습니다. 브라우저 주소창에서 카메라와 마이크를 허용해 주세요.";
   }
@@ -81,6 +82,72 @@ function setupAudioMeter() {
   state.analyser = state.audioContext.createAnalyser();
   state.analyser.fftSize = 512;
   source.connect(state.analyser);
+}
+
+function setupWhisper() {
+  if (state.whisperWorker) return;
+  state.whisperWorker = new Worker("./whisper-worker.js", { type: "module" });
+  state.whisperWorker.onmessage = (event) => {
+    const { type, progress, text, message } = event.data;
+    if (type === "progress" && typeof progress?.progress === "number") {
+      $("live-caption").textContent = `Whisper 모델 준비 중 ${Math.round(progress.progress)}%`;
+    }
+    if (type === "ready") {
+      $("live-caption").textContent = "Whisper 준비 완료. 답변을 시작해 보세요.";
+    }
+    if (type === "transcribing") {
+      $("live-caption").textContent = "Whisper가 답변을 전사하고 있습니다.";
+    }
+    if (type === "complete") {
+      state.transcribing = false;
+      state.transcript = text.trim();
+      $("record-label").textContent = "한 번 더 녹화";
+      $("record-button").disabled = false;
+      $("finish-button").disabled = false;
+      $("live-caption").textContent = state.transcript
+        ? "Whisper 전사가 완료됐습니다. 분석 결과를 확인해 보세요."
+        : "전사된 텍스트가 없습니다. 분석 화면에서 직접 입력할 수 있어요.";
+    }
+    if (type === "error") {
+      state.transcribing = false;
+      $("record-label").textContent = "한 번 더 녹화";
+      $("record-button").disabled = false;
+      $("finish-button").disabled = false;
+      $("live-caption").textContent = `Whisper 전사에 실패했습니다. 분석 화면에서 직접 입력할 수 있어요.`;
+      console.error(message);
+    }
+  };
+  state.whisperWorker.postMessage({ type: "load" });
+}
+
+async function transcribeWithWhisper(blob) {
+  try {
+    if (!state.whisperWorker) setupWhisper();
+    const audio = await blobToMono16k(blob);
+    state.whisperWorker.postMessage({ type: "transcribe", audio: audio.buffer }, [audio.buffer]);
+  } catch (error) {
+    state.transcribing = false;
+    $("record-label").textContent = "한 번 더 녹화";
+    $("record-button").disabled = false;
+    $("finish-button").disabled = false;
+    $("live-caption").textContent = "오디오를 Whisper 전사용으로 준비하지 못했습니다. 분석 화면에서 직접 입력할 수 있어요.";
+    console.error(error);
+  }
+}
+
+async function blobToMono16k(blob) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const decoder = new AudioContextClass();
+  const decoded = await decoder.decodeAudioData(await blob.arrayBuffer());
+  const offline = new OfflineContextClass(1, Math.ceil(decoded.duration * 16000), 16000);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+  await decoder.close();
+  return rendered.getChannelData(0);
 }
 
 function startSampling() {
@@ -102,34 +169,17 @@ function startSampling() {
   }, 120);
 }
 
-function setupRecognition() {
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Recognition) return;
-  state.recognition = new Recognition();
-  state.recognition.lang = "ko-KR";
-  state.recognition.continuous = true;
-  state.recognition.interimResults = true;
-  state.recognition.onresult = (event) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const text = event.results[i][0].transcript;
-      if (event.results[i].isFinal) state.finalTranscript += `${text} `;
-      else interim += text;
-    }
-    state.transcript = `${state.finalTranscript}${interim}`.trim();
-    $("live-caption").textContent = interim;
-  };
-  state.recognition.onerror = () => { $("live-caption").textContent = "자동 전사를 사용할 수 없어 녹화 후 직접 입력할 수 있어요."; };
-  try { state.recognition.start(); } catch (_) {}
-}
-
 function startRecording() {
   state.chunks = [];
   state.transcript = "";
-  state.finalTranscript = "";
   state.followupText = "";
+  state.recordedBlob = null;
   state.recorder = new MediaRecorder(state.stream);
   state.recorder.ondataavailable = (event) => { if (event.data.size) state.chunks.push(event.data); };
+  state.recorder.onstop = () => {
+    state.recordedBlob = new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" });
+    transcribeWithWhisper(state.recordedBlob);
+  };
   state.recorder.start();
   state.recording = true;
   state.startedAt = Date.now();
@@ -139,7 +189,6 @@ function startRecording() {
   $("finish-button").disabled = true;
   state.timerId = setInterval(updateTimer, 250);
   startSampling();
-  setupRecognition();
 }
 
 function stopRecording() {
@@ -153,12 +202,13 @@ function stopRecording() {
     if (finalSilence >= 1500) state.silenceRuns.push(finalSilence);
     state.silenceStartedAt = null;
   }
-  try { state.recognition?.stop(); } catch (_) {}
   $("record-button").classList.remove("recording");
-  $("record-label").textContent = "한 번 더 녹화";
+  $("record-label").textContent = "Whisper 전사 중";
+  $("record-button").disabled = true;
   $("recording-badge").style.display = "none";
-  $("finish-button").disabled = false;
-  $("live-caption").textContent = "녹화가 끝났습니다. 분석 결과를 확인해 보세요.";
+  $("finish-button").disabled = true;
+  state.transcribing = true;
+  $("live-caption").textContent = "녹화가 끝났습니다. Whisper 전사를 시작합니다.";
 }
 
 function updateTimer() {
@@ -196,7 +246,7 @@ function analyze() {
   $("filler-value").textContent = `${fillers.length}회`;
   $("voice-value").textContent = volumeValues.length ? (voiceVariation > .025 ? "충분" : "낮음") : "—";
   $("voice-note").textContent = volumeValues.length ? "음량 변화 기준" : "음성 데이터 없음";
-  $("transcript-source").textContent = state.transcript ? "브라우저 자동 전사" : "직접 입력";
+  $("transcript-source").textContent = state.transcript ? "로컬 Whisper 전사" : "직접 입력";
   renderRubricMap(rubricResults);
 
   const strengths = [];
