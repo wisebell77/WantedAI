@@ -11,7 +11,12 @@ CLAUDE.md 의 설계 원칙 그대로다.
        "당신은 HR 이 맞습니다" 가 아니라
        "당신의 경험은 HR 공고가 요구하는 역량 7개와 겹칩니다 (마케팅은 3개)".
     2. 근거 없는 항목은 내보내지 않는다.
-       모든 역량에는 사용자 문장과 공고 건수가 붙는다. 못 붙이면 뺀다.
+       역량 하나에 **양쪽 근거**가 붙는다.
+           사용자 쪽  그 역량으로 읽힌 경험 원문 문장
+           공고 쪽    그 직무 공고에 실제로 적혀 있던 표기 + 기관·공고명·원문 링크
+       사용자 문장만 보여 주면 "왜 이 직무가 그걸 요구한다는 건데?"에 답을 못 한다.
+       **부족한 역량도 마찬가지다** — 그것도 "이 직무가 이걸 요구한다"는 주장이므로
+       똑같이 공고 원문이 붙는다.
     3. 퍼센트를 쓰지 않는다.
        겹침 비율은 무작위 병합 대조군(61.1%)이 실제 군집(53.8%)보다 높게 나온 지표다.
        숫자가 커 보일 뿐 아무 것도 증명하지 못한다. 건수와 문장만 쓴다.
@@ -23,18 +28,32 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..competency.projector import ProjectionResult, TextProjector
+from .evidence import EvidenceIndex, MarketSignal, Quote
 from .matrix import JobMatrix, JobProfile
 
 
 @dataclass(frozen=True)
 class Evidence:
-    """역량 하나에 붙는 근거."""
+    """역량 하나에 붙는 근거. 사용자 쪽과 공고 쪽이 함께 있어야 완성이다."""
 
     competency: str
-    sentence: str = ""                # 사용자 경험 원문 (갖춘 역량)
+    sentence: str = ""                # 사용자 경험 원문 (갖춘 역량일 때만)
     similarity: float = 0.0
     postings: int = 0                 # 이 직무 공고 중 해당 역량을 요구한 건수
+    quotes: tuple[Quote, ...] = ()    # 공고에 실제로 적혀 있던 표기 + 출처
     is_extension: bool = False        # 확장 노드(민간에서만 나온 개념)인가
+
+    @property
+    def grounded(self) -> bool:
+        """공고 쪽 근거가 있는가. 없으면 화면에 올리지 않는다."""
+        return bool(self.quotes)
+
+    def source_label(self) -> str:
+        for q in self.quotes:
+            for s in q.sources:
+                if s.institution:
+                    return s.label()
+        return ""
 
 
 @dataclass
@@ -69,6 +88,7 @@ class GapReport:
     target: JobMatch
     compare: list[JobMatch] = field(default_factory=list)  # 비교용 이웃 직무
     unmatched: list[str] = field(default_factory=list)     # 사전에 못 붙인 문장
+    market: list[MarketSignal] = field(default_factory=list)
 
     def __repr__(self) -> str:
         return f"<GapReport {self.target.name} 부족 {len(self.target.lack)}개>"
@@ -84,10 +104,16 @@ class Recommender:
 
     def __init__(self, matrix: JobMatrix | None = None,
                  projector: TextProjector | None = None,
-                 taxonomy=None):
+                 taxonomy=None, evidence: EvidenceIndex | None = None):
         self.matrix = matrix or JobMatrix.load()
         self.projector = projector or TextProjector()
         self.taxonomy = taxonomy
+        self.evidence = evidence if evidence is not None else EvidenceIndex.load()
+        # 인덱스가 있으면 **공고 근거가 없는 역량은 버린다.** 서비스가 지켜야 할 규칙이다.
+        # 인덱스를 아직 안 만들었으면(평가·개발 중) 그 규칙을 끄고 돌아간다.
+        # 인덱스가 없다고 조용히 근거 없는 추천을 내보내는 게 아니라,
+        # '근거를 댈 수 없는 모드'임을 flag 로 드러내 둔다.
+        self.require_quotes = bool(self.evidence)
 
     # ── 입력 해석
 
@@ -115,23 +141,55 @@ class Recommender:
     # ── 대조
 
     def compare(self, result: ProjectionResult, profile: JobProfile,
-                lack_limit: int = 10) -> JobMatch:
-        """투영 결과 하나를 직무 하나와 맞춰 본다."""
+                lack_limit: int = 10, quotes: int = 2) -> JobMatch:
+        """투영 결과 하나를 직무 하나와 맞춰 본다.
+
+        갖춘 역량은 사용자 문장 + 공고 원문 양쪽이 있어야 통과한다.
+        부족한 역량은 사용자 문장이 없는 게 당연하므로 공고 원문만 본다.
+        """
         nodes = result.nodes
         have = []
         for c in profile.matched(nodes):
-            ev = result.evidence_for(c)
-            if not ev:                                # 근거 없는 항목은 버린다
+            if not result.evidence_for(c):            # 사용자 쪽 근거
+                continue
+            q = tuple(self.evidence.quotes(profile.code, c, quotes))
+            if self.require_quotes and not q:         # 공고 쪽 근거
                 continue
             best = max((h for h in result.hits if h.node == c),
                        key=lambda h: h.similarity)
             have.append(Evidence(c, best.evidence, best.similarity,
-                                 profile.df.get(c, 0), best.is_extension))
-        lack = [Evidence(c, postings=profile.df.get(c, 0))
-                for c in profile.missing(nodes)[:lack_limit]]
+                                 profile.df.get(c, 0), q, best.is_extension))
+
+        lack = []
+        for c in profile.missing(nodes):
+            q = tuple(self.evidence.quotes(profile.code, c, quotes))
+            if self.require_quotes and not q:
+                continue
+            lack.append(Evidence(c, postings=profile.df.get(c, 0), quotes=q))
+            if len(lack) >= lack_limit:
+                break
+
         return JobMatch(profile.code, profile.name, profile.units,
                         profile.institutions, have, lack,
                         profile.score(nodes))
+
+    def market_signals(self, result: ProjectionResult,
+                       limit: int = 5) -> list[MarketSignal]:
+        """확장 노드에 붙은 문장이 있으면 '시장이 요구하는 것'으로 따로 낸다.
+
+        공공 축에 대응 개념이 없어 직무 행렬에는 못 들어가는 것들이다.
+        그렇다고 버리면 사용자가 가진 가장 최신 역량(클라우드·LLM·ERP)이
+        통째로 사라진다. 대신 **판정과 섞지 않고 별도 블록**으로 낸다.
+
+        민간 공고 본문은 인용하지 않는다. 어느 기업의 어떤 직무가 요구하는지까지만.
+        """
+        out = []
+        for node in sorted(result.nodes):
+            m = self.evidence.market(node)
+            if m:
+                out.append(m)
+        out.sort(key=lambda m: -m.corps)
+        return out[:limit]
 
     # ── 정방향
 
@@ -148,7 +206,8 @@ class Recommender:
         tgt = self.compare(res, self.matrix[code], lack_limit)
         near = [m for m in self.reverse_from(res, limit=neighbors + 1)
                 if m.code != code][:neighbors]
-        return GapReport(tgt, near, [s for s, _ in res.unmatched])
+        return GapReport(tgt, near, [s for s, _ in res.unmatched],
+                         self.market_signals(res))
 
     # ── 역방향
 

@@ -106,6 +106,10 @@ class Paths:
     def job_matrix(self) -> Path:           # 직무 × 역량 행렬
         return self.data / "job_matrix.json"
 
+    @property
+    def evidence(self) -> Path:             # 근거 인덱스 (공고 원문 + 출처)
+        return self.data / "evidence.json"
+
     def ensure(self) -> None:
         for p in (self.data, self.alio_detail, self.jd_files, self.jd_text,
                   self.private_static, self.private_browser, self.private_ocr):

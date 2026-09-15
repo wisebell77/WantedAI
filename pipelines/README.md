@@ -11,7 +11,7 @@
 2. build_units.py        첨부 텍스트 → 직무 단위 + NCS 코드  [캐시만 읽음]
 3. refresh_private.py    민간 공고 → 직무 단위             [느림 · 외부 사이트]
 4. build_dictionary.py   단위 → L2 군집 + 확장 노드         [임베딩. 캐시 있음]
-5. build_matrix.py       단위 + 사전 → 직무 × 역량 행렬      [빠름]
+5. build_matrix.py       단위 + 사전 → 행렬 + 근거 인덱스     [빠름]
 6. evaluate.py           설정이 나은지 확인                 [빠름]
    recommend_demo.py     실제로 돌려 보기
 ```
@@ -41,7 +41,7 @@ python pipelines/evaluate.py
 | `build_units.py` | 네트워크를 안 탄다. 분류 확정 경로별 건수가 출력되니 이상하면 여기서 잡는다 |
 | `refresh_private.py` | 본문 수집(Playwright)과 이미지 판독은 밖에 있다. 판독 후 `--merge-only` |
 | `build_dictionary.py` | 임베딩이 오래 걸린다. 임계만 바꿀 땐 캐시를 써서 즉시 끝난다 |
-| `build_matrix.py` | `--plan` 을 주면 다음 수집 계획도 같이 낸다 |
+| `build_matrix.py` | 행렬과 근거 인덱스를 **같이** 만든다. `--plan` 은 수집 계획도 |
 | `evaluate.py` | 숫자에 **기준일**을 같이 적는다. 갱신하면 달라진다 |
 | `recommend_demo.py` | 프리셋 3종이 여기 있다. 랜딩에 그대로 쓴다 |
 

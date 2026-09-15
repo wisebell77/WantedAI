@@ -39,12 +39,35 @@ PRESETS = {
 }
 
 
-def show(m, limit: int = 5) -> None:
+def competency(e, indent: str = "     ") -> None:
+    """역량 하나. 사용자 쪽 근거와 공고 쪽 근거를 함께 낸다."""
+    print(f"{indent}· {e.competency}  (공고 {e.postings}건에서 요구)")
+    if e.sentence:
+        print(f"{indent}    당신의 경험 — {e.sentence[:56]}")
+    for q in e.quotes[:1]:
+        print(f"{indent}    공고 원문   — {q.text[:56]}")
+        src = e.source_label()
+        if src:
+            print(f"{indent}                  {src[:52]}")
+
+
+def show(m, limit: int = 4) -> None:
     print(f"  {m.sentence()}")
     for e in m.have[:limit]:
-        tag = " [확장]" if e.is_extension else ""
-        print(f"     · {e.competency}{tag}  (공고 {e.postings}건)")
-        print(f"       근거 — {e.sentence[:60]}")
+        competency(e)
+    print()
+
+
+def show_market(signals) -> None:
+    if not signals:
+        return
+    print("[민간 축] 공공 직무기술서에는 없지만 시장이 요구하는 것")
+    print("  (민간 공고는 본문을 인용하지 않고 출처만 표시합니다)")
+    print()
+    for s in signals:
+        print(f"     · {s.sentence()}")
+        for corp, role in s.examples[:2]:
+            print(f"         {corp}" + (f" — {role[:40]}" if role else ""))
     print()
 
 
@@ -69,25 +92,29 @@ def main() -> int:
         print(f"  · {t}")
     print()
 
+    res = r.profile(texts)          # 투영을 한 번만 하고 돌려 쓴다
+
     if args.target:
         rep = r.forward(texts, args.target)
         print(f"[정방향] {rep.target.name}")
         show(rep.target, args.limit)
         print("  아직 겹치지 않는 역량 (공고에서 자주 요구되는 순)")
+        print()
         for e in rep.target.lack[:args.limit]:
-            print(f"     · {e.competency}  (공고 {e.postings}건)")
+            competency(e)
         print()
         print("  비교 — 같은 경험으로 본 다른 직무")
         for m in rep.compare:
             print(f"     {m.name}: 겹침 {m.overlap}개")
         print()
+        show_market(rep.market)
         if rep.unmatched:
             print(f"  사전에 붙지 않은 문장 {len(rep.unmatched)}개 "
                   f"(확장 노드 후보로 쌓인다)")
         return 0
 
     matches = (r.unexpected(texts, seen=args.seen, limit=args.limit)
-               if args.seen else r.reverse(texts, limit=args.limit))
+               if args.seen else r.reverse_from(res, limit=args.limit))
     print("[역방향] 겹침이 많은 직무" +
           (" — 안 보던 분야만" if args.seen else ""))
     print()
@@ -95,6 +122,7 @@ def main() -> int:
         show(m)
     if not matches:
         print("  근거가 충분한 직무가 없다. 경험 원문을 더 넣어 보라.")
+    show_market(r.market_signals(res))
     return 0
 
 
