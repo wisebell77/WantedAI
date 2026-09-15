@@ -11,20 +11,18 @@
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="./coach.html" aria-label="Overlap AI 커리어 코치 홈">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
-          <span>OVERLAP <b>INTERVIEW LAB</b></span>
+          <span>Overlap</span>
         </a>
         <div class="topbar-meta">
-          <span class="privacy-note">Whisper 전사는 이 기기에서 처리됩니다</span>
-          <a class="session-id" href="./coach.html">AI 커리어 코치 →</a>
+          <span class="privacy-note">로컬 Whisper 전사</span>
+          <a class="session-id" href="./coach.html">AI 코치</a>
         </div>
       </header>
 
       <main>
         <section id="practice-view" class="practice-layout" aria-labelledby="practice-title">
           <aside class="brief-panel">
-            <div class="eyebrow">INTERVIEW BRIEF</div>
-            <h1 id="practice-title">답변을 시작하기 전에<br />평가 기준을 확인하세요.</h1>
+            <h1 id="practice-title">면접 연습</h1>
 
             <label class="field-label" for="role-select">지원 직무</label>
             <div class="select-wrap">
@@ -36,9 +34,8 @@
             </div>
 
           <div class="signal-card">
-              <span class="signal-index">01</span>
               <div>
-                <p>이번 질문의 핵심 신호</p>
+                <p>질문 핵심</p>
                 <strong id="signal-title">문제 정의 · 분석 과정 · 사업적 영향</strong>
               </div>
             </div>
@@ -54,14 +51,14 @@
 
             <div class="boundary-note">
               <span aria-hidden="true">◇</span>
-              <p><strong>초기 MVP 분석</strong>처음에는 Whisper 모델을 내려받습니다. 전사는 브라우저 안에서 처리하며, 표정·시선은 채용 적합도 판단에 사용하지 않습니다.</p>
+              <p>첫 실행 시 Whisper 모델을 내려받습니다.</p>
             </div>
           </aside>
 
           <section class="stage-panel">
             <div class="question-row">
               <div>
-                <span class="question-count">QUESTION <b id="question-number">1</b> / 3</span>
+                <span class="question-count"><b id="question-number">1</b> / 3</span>
                 <h2 id="question-text">데이터로 문제를 정의하고 해결했던 경험을 설명해 주세요.</h2>
               </div>
               <button id="next-question" class="icon-button" type="button" aria-label="다음 질문">→</button>
@@ -105,7 +102,7 @@
             <section class="score-card">
               <div class="score-top"><span>답변 완성도</span><b id="total-score">—</b></div>
               <div class="score-track"><i id="score-fill"></i></div>
-              <p>합격 가능성이 아닌, 현재 답변이 평가 기준을 얼마나 명확히 보여줬는지 나타냅니다.</p>
+              <p>답변 근거의 명확성 지표입니다.</p>
             </section>
 
             <section class="metrics-card" aria-label="전달 지표">
@@ -117,16 +114,16 @@
 
             <section id="recording-card" class="recording-card" hidden>
               <div class="card-heading">
-                <div><span class="eyebrow">RECORDING</span><h2>내 녹화 다시 보기</h2></div>
+                <div><h2>녹화 다시 보기</h2></div>
                 <span class="source-badge">이 브라우저에서만 보관</span>
               </div>
               <video id="recording-playback" controls playsinline></video>
-              <p class="card-intro">답변 내용과 표정·자세·말의 흐름을 함께 확인해 보세요. 녹화본은 서버에 업로드되지 않으며, 새 녹화를 시작하거나 페이지를 닫으면 사라집니다.</p>
+              <p class="card-intro">녹화본은 이 브라우저에만 임시 보관됩니다.</p>
             </section>
 
             <section class="transcript-card">
               <div class="card-heading">
-                <div><span class="eyebrow">TRANSCRIPT</span><h2>내 답변</h2></div>
+                <div><h2>내 답변</h2></div>
                 <span id="transcript-source" class="source-badge">직접 입력</span>
               </div>
               <label class="sr-only" for="transcript-input">답변 텍스트</label>
@@ -135,7 +132,7 @@
             </section>
 
             <section class="feedback-card">
-              <div class="card-heading"><div><span class="eyebrow">EVIDENCE REVIEW</span><h2>근거 기반 피드백</h2></div></div>
+              <div class="card-heading"><div><h2>피드백</h2></div></div>
               <div id="feedback-list" class="feedback-list"></div>
               <button id="agent-feedback-button" class="text-button" type="button">AI 코치 피드백 받기 →</button>
               <p id="agent-feedback-status" class="agent-feedback-status" aria-live="polite"></p>
@@ -143,15 +140,15 @@
 
             <section class="rubric-card">
               <div class="card-heading">
-                <div><span class="eyebrow">RUBRIC MAP</span><h2>항목별 답변 근거</h2></div>
+                <div><h2>항목별 근거</h2></div>
                 <span class="source-badge">MVP 규칙 기반</span>
               </div>
-              <p class="card-intro">점수는 합격 가능성이 아니라, 현재 답변에서 각 평가 항목의 근거가 얼마나 확인되는지를 나타냅니다.</p>
+              <p class="card-intro">MVP 규칙 기반 분석입니다.</p>
               <div id="rubric-map" class="rubric-map"></div>
             </section>
 
             <section id="followup-card" class="followup-card">
-              <div class="card-heading"><div><span class="eyebrow">FOLLOW-UP</span><h2>한 가지를 더 물어볼게요</h2></div><span id="followup-status" class="source-badge">답변 대기</span></div>
+              <div class="card-heading"><div><h2>꼬리질문</h2></div><span id="followup-status" class="source-badge">답변 대기</span></div>
               <p id="followup-context" class="followup-context"></p>
               <label class="sr-only" for="followup-input">꼬리질문 답변</label>
               <textarea id="followup-input" class="followup-input" placeholder="꼬리질문에 답하면 최초 답변과 함께 다시 평가합니다."></textarea>
@@ -159,13 +156,7 @@
             </section>
           </div>
 
-          <div class="expert-boundary">
-            <div class="expert-icon" aria-hidden="true">!</div>
-            <div>
-              <h2>전문가 검증이 필요한 영역</h2>
-              <p>현재 결과는 연습 보조용입니다. 직무별 평가 루브릭은 현업 면접관·산업심리 전문가의 검토가, 시선·자세 분석은 컴퓨터 비전 전문가와 편향·접근성 검증이 필요합니다.</p>
-            </div>
-          </div>
+          <div class="expert-boundary"><p>현재 면접 루브릭과 꼬리질문은 MVP 규칙 기반입니다.</p></div>
         </section>
       </main>
     </div>

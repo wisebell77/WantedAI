@@ -24,6 +24,18 @@ function roleExcerpt(text = "", roleName = "") {
   const start = index >= 0 ? Math.max(0, index - 120) : 0;
   return text.slice(start, start + 2200);
 }
+function extractDeadline(text = "") {
+  const dates = [...text.matchAll(/(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일/g)].map((match) => ({
+    value: `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`,
+    index: match.index
+  }));
+  const ranked = dates.map((date) => {
+    const context = text.slice(Math.max(0, date.index - 120), date.index + 40);
+    const score = (/(마감|접수|지원)/.test(context) ? 2 : 0) - (/(유효|경력|입사|졸업)/.test(context) ? 2 : 0);
+    return { ...date, score };
+  }).sort((a, b) => b.score - a.score || b.index - a.index);
+  return ranked[0]?.score > 0 ? ranked[0].value : null;
+}
 const contexts = roles.map((role, index) => {
   const posting = postingByUrl.get(role.url) || {};
   return {
@@ -37,6 +49,7 @@ const contexts = roles.map((role, index) => {
     requiredSkills: role.techs || [],
     preferredSkills: [],
     sourceUrl: role.url,
+    deadline: extractDeadline(posting.clean),
     sourceType: role.src,
     sourceUpdatedAt: "2026-09-11"
   };
@@ -44,7 +57,59 @@ const contexts = roles.map((role, index) => {
 
 const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8" };
 const sendJson = (res, status, body) => { res.writeHead(status, { "Content-Type": mime[".json"] }); res.end(JSON.stringify(body)); };
-async function readJson(req) { const chunks = []; for await (const chunk of req) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
+  catch { const error = new Error("INVALID_JSON"); error.code = "INVALID_JSON"; throw error; }
+}
+const validModes = new Set(["timeline", "task_prioritization", "jd_tagging", "cover_letter_guide", "consultation", "interview_feedback"]);
+function fallbackActions(input) {
+  const skills = input.jobContext.requiredSkills.slice(0, 3).join(", ") || "공고의 필수 조건";
+  if (input.mode === "task_prioritization") return [
+    { title: "공고 요구사항 확인", reason: `${skills}와 내 경험의 연결점을 정리합니다.`, priority: "high" },
+    { title: "경험 근거 정리", reason: "수치, 역할, 결과가 드러나는 경험 한 가지를 정리합니다.", priority: "high" },
+    { title: "자소서 초안 작성", reason: "정리한 경험을 바탕으로 지원 동기를 초안으로 작성합니다.", priority: "medium" }
+  ];
+  if (input.mode !== "timeline") return [];
+  const due = input.jobContext.deadline ? new Date(`${input.jobContext.deadline}T23:59:59`) : null;
+  const days = due ? Math.max(0, Math.ceil((due - new Date()) / 86400000)) : null;
+  const label = (ratio, fallback) => days === null ? fallback : (Math.max(0, Math.ceil(days * ratio)) ? `D-${Math.max(0, Math.ceil(days * ratio))}` : "마감일");
+  return [
+    { title: `${label(1, "1단계")} · 공고 요구사항 확인`, reason: `${skills}와 내 경험의 연결점을 정리합니다.`, priority: "high" },
+    { title: `${label(0.65, "2단계")} · 경험 근거 정리`, reason: "수치, 역할, 결과가 드러나는 경험 한 가지를 정리합니다.", priority: "high" },
+    { title: `${label(0.35, "3단계")} · 자소서 초안 작성`, reason: "정리한 경험을 바탕으로 지원 동기를 작성합니다.", priority: "medium" },
+    { title: `${label(0, "4단계")} · 제출 전 확인`, reason: "지원서와 필수 제출 정보를 마지막으로 확인합니다.", priority: "low" }
+  ];
+}
+function addTimelineLabels(actions, input) {
+  if (input.mode !== "timeline" || !input.jobContext.deadline) return actions;
+  const due = new Date(`${input.jobContext.deadline}T23:59:59`);
+  const days = Math.max(0, Math.ceil((due - new Date()) / 86400000));
+  return actions.map((item, index) => {
+    if (/^(D-\d+|마감일)/.test(item.title)) return item;
+    const remaining = Math.max(0, Math.ceil(days * (1 - index / Math.max(1, actions.length - 1))));
+    return { ...item, title: `${remaining ? `D-${remaining}` : "마감일"} · ${item.title}` };
+  });
+}
+function normalizeAgentResult(result, input) {
+  if (typeof result?.answer !== "string" || !result.answer.trim()) {
+    const error = new Error("AGENT_RESPONSE_INVALID");
+    error.code = "AGENT_RESPONSE_INVALID";
+    throw error;
+  }
+  const asArray = (value) => Array.isArray(value) ? value : (typeof value === "string" && value.trim() ? [value] : []);
+  const nextActions = asArray(result.nextActions).filter((item) => item?.title).slice(0, 5).map((item) => ({
+    title: String(item.title), reason: String(item.reason || ""), priority: ["high", "medium", "low"].includes(item.priority) ? item.priority : "medium"
+  }));
+  return {
+    answer: result.answer.trim(),
+    evidence: asArray(result.evidence).filter((item) => item?.source && item?.quote).map((item) => ({ source: String(item.source), quote: String(item.quote) })),
+    nextActions: addTimelineLabels(nextActions.length ? nextActions : fallbackActions(input), input),
+    missingInformation: asArray(result.missingInformation).map(String),
+    modelUsed: result.modelUsed
+  };
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -68,14 +133,22 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/v1/agent/chat") {
       if (!process.env.UPSTAGE_API_KEY) return sendJson(res, 503, { error: "UPSTAGE_API_KEY_MISSING" });
       const input = await readJson(req);
+      if (!validModes.has(input.mode)) return sendJson(res, 422, { error: "VALID_AGENT_MODE_REQUIRED" });
       const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
       if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
-      const result = await runCareerCoachAgent({ ...input, jobContext: canonicalJob }, {
-        apiKey: process.env.UPSTAGE_API_KEY,
-        fastModel: process.env.UPSTAGE_FAST_MODEL || "solar-mini",
-        coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
-      });
-      return sendJson(res, 200, result);
+      if (!input.userProfile?.experience?.trim()) return sendJson(res, 422, { error: "USER_EXPERIENCE_REQUIRED" });
+      if (!input.message?.trim()) return sendJson(res, 422, { error: "MESSAGE_REQUIRED" });
+      try {
+        const result = await runCareerCoachAgent({ ...input, jobContext: canonicalJob }, {
+          apiKey: process.env.UPSTAGE_API_KEY,
+          fastModel: process.env.UPSTAGE_FAST_MODEL || "solar-mini",
+          coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
+        });
+        return sendJson(res, 200, normalizeAgentResult(result, { ...input, jobContext: canonicalJob }));
+      } catch (error) {
+        console.error("Agent upstream error:", error.message);
+        return sendJson(res, 502, { error: "AGENT_UPSTREAM_ERROR" });
+      }
     }
     const requested = url.pathname === "/" ? "/coach.html" : url.pathname;
     const filePath = normalize(join(dist, requested));
@@ -84,9 +157,10 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": mime[extname(filePath)] || "application/octet-stream" });
     res.end(file);
   } catch (error) {
+    if (error.code === "INVALID_JSON") return sendJson(res, 400, { error: "INVALID_JSON" });
     if (error.code === "ENOENT") return sendJson(res, 404, { error: "NOT_FOUND" });
     console.error(error);
-    sendJson(res, 500, { error: "INTERNAL_ERROR", message: error.message });
+    sendJson(res, 500, { error: "INTERNAL_ERROR" });
   }
 });
 

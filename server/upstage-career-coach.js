@@ -33,15 +33,15 @@ export async function runCareerCoachAgent(input, options) {
     "조언마다 근거가 된 JD 필드 또는 사용자 입력을 evidence에 명시한다.",
     "반드시 JSON만 반환한다.",
     "형식: {answer:string,evidence:[{source:string,quote:string}],nextActions:[{title:string,reason:string,priority:'high'|'medium'|'low'}],missingInformation:string[]}.",
-    "nextActions는 최대 5개, evidence는 실제 입력의 짧은 인용만 사용한다."
+    "timeline과 task_prioritization 모드에서는 nextActions를 반드시 3~5개 반환한다. timeline 모드의 각 title에는 선택 공고 마감일 기준 D-며칠 또는 마감일 순서를 넣는다. evidence는 실제 입력의 짧은 인용만 사용한다."
   ].join(" ");
   const payload = {
     mode: input.mode,
     request: input.message,
     selectedJob: input.jobContext,
     userProfile: input.userProfile,
-    currentTasks: input.currentTasks || [],
-    recentConversation: (input.history || []).slice(-6)
+    currentTasks: (input.currentTasks || []).filter((item) => item?.postingId === input.jobContext.postingId),
+    recentConversation: (input.history || []).filter((item) => item?.postingId === input.jobContext.postingId).slice(-6)
   };
   const result = await callUpstage([
     { role: "system", content: system },
