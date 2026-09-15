@@ -11,7 +11,7 @@
 이 평가를 도입하자 결론이 뒤집혔다.
 
     내부 평가만 봤을 때   L2 는 이득이 없거나 해로워 보였다
-    교차 평가로 재니      L1 23.3%  →  +L2 35.2%  →  +문장투영 55.3%
+    교차 평가로 재니      L1 32.0%  →  +L2 39.0%  →  +문장투영 60.3%
 
 정답은 거칠게 잡는다. 민간 직무의 자체 분류를 NCS 대분류 묶음에 대응시키고,
 예측한 소분류가 그 묶음에 속하면 맞힌 것으로 본다.
@@ -72,9 +72,9 @@ class CrossDomainEvaluator:
 
     >>> ev = CrossDomainEvaluator(units, roles)
     >>> ev.string_match()                     # L1 만
-    <L1만 Top-1 23.3% Top-3 51.9%>
+    <L1만 Top-1 32.0% Top-3 57.5%>
     >>> ev.projection(TextProjector())        # 3절 문장 투영
-    <투영 sim>=0.4 k=5 Top-1 55.3% Top-3 78.0%>
+    <투영 sim>=0.4 k=5 Top-1 60.3% Top-3 78.8%>
     """
 
     def __init__(self, units, roles, settings=SETTINGS, gold=None):

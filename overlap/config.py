@@ -92,7 +92,7 @@ class Paths:
 
     @property
     def l2_clusters(self) -> Path:          # L2 의미 군집
-        return self.data / "l2_clusters_35.json"
+        return self.data / "l2_clusters_38.json"
 
     @property
     def l2_embeddings(self) -> Path:        # 임베딩 캐시
@@ -139,7 +139,7 @@ class Settings:
     embed_model: str = "jhgan/ko-sroberta-multitask"
     min_similarity: float = 0.40
     project_top_k: int = 5
-    """교차평가 Top-3 79.4%. 임계 0.35~0.50 구간은 평탄하다."""
+    """교차평가 Top-3 78.8%. 임계 0.35~0.50 구간은 평탄하다."""
 
     # 직무군 포함 기준
     min_effective_units: int = 30

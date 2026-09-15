@@ -37,7 +37,7 @@ class CompetencyDictionary:
     >>> d.fold("보안패치및업그레이드")
     '서버보안소프트웨어설치및운영'
     >>> len(d)
-    2065
+    2051
     """
 
     def __init__(self, clusters: ClusterResult,

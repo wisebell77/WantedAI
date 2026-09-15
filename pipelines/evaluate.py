@@ -41,6 +41,8 @@ def main() -> int:
                     help="내부 평가에서 top_k / min_df 를 훑는다")
     ap.add_argument("--no-projection", action="store_true",
                     help="교차 평가에서 문장 투영을 건너뛴다(모델 로딩 회피)")
+    ap.add_argument("--clusters", default=None,
+                    help="쓸 L2 군집 파일. 임계를 다시 잡을 때 쓴다")
     args = ap.parse_args()
 
     units = load_units()
@@ -60,8 +62,11 @@ def main() -> int:
         print(rep.collection_plan())
 
     dic = None
-    if PATHS.l2_clusters.exists():
-        dic = CompetencyDictionary.load()
+    src = Path(args.clusters) if args.clusters else PATHS.l2_clusters
+    if src.exists():
+        dic = CompetencyDictionary.load(clusters=src)
+        if args.clusters:
+            print(f"군집 파일 {src.name}")
 
     if run("indomain"):
         section("2. 내부 평가 — 같은 방언끼리. 설정값 고르기용")

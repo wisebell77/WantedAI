@@ -2,7 +2,7 @@
 
     python pipelines/build_dictionary.py                 # 둘 다
     python pipelines/build_dictionary.py --skip-cluster  # 확장 노드만
-    python pipelines/build_dictionary.py --threshold 0.30 0.35 0.40
+    python pipelines/build_dictionary.py --threshold 0.35 0.38 0.40
 
 임베딩이 오래 걸리지만 캐시(data/l2_emb.npz)가 남아 임계만 바꿀 때는 즉시 끝난다.
 
@@ -26,7 +26,7 @@ from overlap.collect.base import read_json
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--threshold", type=float, nargs="+", default=[0.35],
+    ap.add_argument("--threshold", type=float, nargs="+", default=[0.38],
                     help="군집 거리 임계. 여러 개면 각각 저장한다")
     ap.add_argument("--min-df", type=int, default=3, help="군집 대상 최소 등장 단위 수")
     ap.add_argument("--skip-cluster", action="store_true")
