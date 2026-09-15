@@ -17,11 +17,12 @@
 
 from .config import PATHS, SETTINGS, Paths, Settings, api_key
 from .competency.dictionary import CompetencyDictionary
+from .llm import UpstageClient
 from .competency.projector import TextProjector
 from .recommend.evidence import EvidenceIndex
 from .recommend.matrix import JobMatrix
 from .recommend.scorer import Recommender
 
 __all__ = ["PATHS", "SETTINGS", "Paths", "Settings", "api_key",
-           "CompetencyDictionary", "TextProjector", "JobMatrix", "EvidenceIndex",
+           "CompetencyDictionary", "TextProjector", "UpstageClient", "JobMatrix", "EvidenceIndex",
            "Recommender"]

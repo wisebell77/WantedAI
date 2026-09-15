@@ -45,6 +45,8 @@ python pipelines/evaluate.py
 | `evaluate.py` | 숫자에 **기준일**을 같이 적는다. 갱신하면 달라진다 |
 | `recommend_demo.py` | 프리셋 3종이 여기 있다. 랜딩에 그대로 쓴다 |
 
+화면으로 보려면 `python web/server.py` (설치 불필요, `web/README.md` 참고).
+
 ## 알아 둘 것
 
 - `.env` 가 저장소 루트에 있어야 한다(`DATA_GO_KR_KEY`, `WORK24_KEY_RECRUIT`).

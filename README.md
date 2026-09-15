@@ -38,6 +38,7 @@ Career Explorer 는 *현재 직무 타이틀*을 요구한다. 우리 타깃인 
 ## 구조
 
 ```
+web/            로컬 확인용 화면 (표준 라이브러리 서버 + HTML 하나)
 overlap/        엔진 (라이브러리)
   config.py       경로·상수·인증키. 모든 모듈이 여기만 본다
   collect/        공고 수집 — 네트워크를 타는 코드는 전부 여기에만
@@ -72,6 +73,12 @@ for m in r.reverse(["학회 운영진으로 8명 일정 조율", "설문 300건 
 python pipelines/recommend_demo.py --preset 데이터분석
 ```
 
+화면으로 보려면 — 설치가 더 필요 없다:
+
+```bash
+python web/server.py
+```
+
 ## 데이터 파이프라인
 
 ```
@@ -94,7 +101,7 @@ evaluate.py        →  커버리지 / 내부 평가 / 교차 평가
 | 파일 | 크기 | 내용 |
 |---|---|---|
 | `job_matrix.json` | 1.0 MB | 직무 38개 × 역량 10,361개 (요구 건수 + IDF) |
-| `evidence.json` | 1.9 MB | 공고 원문 표기 + 출처 문서 1,043건 (gzip 0.4MB) |
+| `evidence.json` | 1.9 MB | 공고 원문 표기 · 대표 공고 · 출처 문서 1,043건 (gzip 0.4MB) |
 | 노드 벡터 | 3.0 MB | 2,051개 × 768차원 float16 |
 | 사전·분류표 | 1.8 MB | L2 군집, 확장 노드, NCS 분류표 |
 

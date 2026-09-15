@@ -84,6 +84,30 @@ class Quote:
 
 
 @dataclass(frozen=True)
+class RelatedPosting:
+    """사용자 역량과 가장 많이 겹친 공고.
+
+    **지난 공고다.** 2022~2025년 공공기관 채용공시에서 왔고 대부분 마감됐다.
+    "지원하세요"가 아니라 "이 직무를 이렇게 정의한 공고"로 써야 한다.
+    지금 지원 가능한 공고는 공채속보(민간) 쪽이고 성격이 다르다.
+    """
+
+    source: Source
+    competencies: tuple[str, ...] = ()
+
+    @property
+    def overlap(self) -> int:
+        return len(self.competencies)
+
+    def sentence(self) -> str:
+        return (f"{self.source.label()} — 당신과 겹치는 역량 "
+                f"{self.overlap}개를 요구했습니다")
+
+    def __repr__(self) -> str:
+        return f"<RelatedPosting {self.source.institution} 겹침 {self.overlap}>"
+
+
+@dataclass(frozen=True)
 class MarketSignal:
     """민간 확장 노드 — 공공 축에 없는데 시장이 요구하는 것.
 
@@ -225,6 +249,29 @@ class EvidenceIndex:
     def _source(self, file_no: str) -> Source:
         m = self._docs.get(str(file_no), {})
         return Source(m.get("i", ""), m.get("t", ""), m.get("y"), m.get("u", ""))
+
+    def postings(self, code: str, nodes, limit: int = 3) -> list[RelatedPosting]:
+        """사용자 역량과 가장 많이 겹친 공고를 위에서부터.
+
+        별도 색인을 두지 않는다. 근거를 저장할 때 이미 (직무, 역량)마다
+        출처 문서 id 를 달아 뒀으므로, 그 문서들을 세기만 하면 된다.
+        새 데이터도 추가 용량도 필요 없다.
+
+        같은 문서가 여러 역량의 근거로 잡힐수록 그 직무를 잘 대표한다.
+        """
+        by_doc: dict[str, set] = defaultdict(set)
+        rows = self._items.get(code, {})
+        for n in nodes:
+            for r in rows.get(n, []):
+                for d in r.get("d", []):
+                    by_doc[d].add(n)
+        ranked = sorted(by_doc.items(), key=lambda x: (-len(x[1]), x[0]))
+        out = []
+        for doc, comps in ranked[:limit]:
+            src = self._source(doc)
+            if src.institution:                       # 출처를 못 대면 내보내지 않는다
+                out.append(RelatedPosting(src, tuple(sorted(comps))))
+        return out
 
     def market(self, node: str) -> MarketSignal | None:
         m = self._market.get(node)

@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..competency.projector import ProjectionResult, TextProjector
-from .evidence import EvidenceIndex, MarketSignal, Quote
+from .evidence import EvidenceIndex, MarketSignal, Quote, RelatedPosting
 from .matrix import JobMatrix, JobProfile
 
 
@@ -66,6 +66,7 @@ class JobMatch:
     institutions: int
     have: list[Evidence] = field(default_factory=list)   # 겹치는 역량
     lack: list[Evidence] = field(default_factory=list)   # 요구되는데 없는 역량
+    postings: list[RelatedPosting] = field(default_factory=list)  # 대표 공고
     score: float = 0.0                                   # 정렬용. 화면에 쓰지 않는다
 
     @property
@@ -141,7 +142,8 @@ class Recommender:
     # ── 대조
 
     def compare(self, result: ProjectionResult, profile: JobProfile,
-                lack_limit: int = 10, quotes: int = 2) -> JobMatch:
+                lack_limit: int = 10, quotes: int = 2,
+                postings: int = 3) -> JobMatch:
         """투영 결과 하나를 직무 하나와 맞춰 본다.
 
         갖춘 역량은 사용자 문장 + 공고 원문 양쪽이 있어야 통과한다.
@@ -171,6 +173,9 @@ class Recommender:
 
         return JobMatch(profile.code, profile.name, profile.units,
                         profile.institutions, have, lack,
+                        self.evidence.postings(profile.code,
+                                               [e.competency for e in have],
+                                               postings),
                         profile.score(nodes))
 
     def market_signals(self, result: ProjectionResult,
