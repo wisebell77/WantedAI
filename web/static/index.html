@@ -54,6 +54,23 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
 .does.sm{font-size:12.5px;margin:5px 0 0;border-left-color:var(--line)}
 .sub{padding:9px 0;border-top:1px solid var(--line)}
 .sub.top b{color:var(--good)}
+/* 모드 토글 — 정방향/역방향은 성격이 달라서 한 목록에 섞으면 안 된다 */
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:transparent;color:var(--dim);border:0;
+  padding:9px 0;font:500 13.5px/1 inherit;border-radius:0}
+.seg button.on{background:var(--accent);color:#0b1020;font-weight:600}
+/* 검색형 선택창 — 122개를 스크롤로 찾는 건 무리다 */
+.combo{position:relative}
+.combo ul{position:absolute;z-index:20;left:0;right:0;top:100%;margin:4px 0 0;
+  padding:4px;list-style:none;max-height:260px;overflow:auto;display:none;
+  background:#0b0d12;border:1px solid #39414f;border-radius:8px;
+  box-shadow:0 8px 28px rgba(0,0,0,.55)}
+.combo ul.open{display:block}
+.combo li{padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13.5px}
+.combo li:hover,.combo li.sel{background:#1b2130}
+.combo li .lv{color:var(--dim);font-size:11.5px;margin-left:6px}
+.combo li .pa{color:var(--dim)}
+.combo .none{color:var(--dim);padding:10px;font-size:13px}
 #tip{position:fixed;z-index:99;max-width:420px;display:none;
   background:#0b0d12;border:1px solid #39414f;border-radius:8px;
   padding:11px 13px;font-size:12.5px;line-height:1.55;color:#d7dce4;
@@ -86,9 +103,19 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
     </div>
 
     <label>모드</label>
-    <select id="target">
-      <option value="">역방향 — 겹침이 많은 직무를 찾는다</option>
-    </select>
+    <div class="seg">
+      <button id="mRev" class="on">역방향 — 겹치는 직무 찾기</button>
+      <button id="mFwd">정방향 — 목표와의 격차</button>
+    </div>
+
+    <div id="pick" hidden>
+      <label>목표 직무 — 이름을 입력해 좁힐 수 있습니다</label>
+      <div class="combo">
+        <input id="q" autocomplete="off" placeholder="예) 정보기술  ·  빅데이터">
+        <ul id="list"></ul>
+      </div>
+      <p class="meta" id="picked" style="margin:8px 0 0"></p>
+    </div>
 
     <div class="row" style="margin-top:16px">
       <button id="run">대조하기</button>
@@ -106,11 +133,52 @@ const esc = s => (s ?? "").replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let JOBS = [];
 
+let MODE = "rev", TARGET = "";
+
+function setMode(m){
+  MODE = m;
+  $("#mRev").classList.toggle("on", m === "rev");
+  $("#mFwd").classList.toggle("on", m === "fwd");
+  $("#pick").hidden = m !== "fwd";
+}
+$("#mRev").onclick = () => setMode("rev");
+$("#mFwd").onclick = () => setMode("fwd");
+
+// 122개를 스크롤로 찾는 건 무리다. 입력할 때마다 목록을 좁힌다.
+function renderList(term){
+  const ul = $("#list");
+  const t = (term || "").trim().toLowerCase();
+  const hit = JOBS.filter(j => !t || j.label.toLowerCase().includes(t)).slice(0, 60);
+  ul.innerHTML = hit.length ? hit.map(j => {
+    const [pa, nm] = j.parent ? [j.parent + " › ", j.name] : ["", j.name];
+    return `<li data-code="${j.code}" data-label="${esc(j.label)}">` +
+      `<span class="pa">${esc(pa)}</span>${esc(nm)}` +
+      `<span class="lv">${j.level} · 공고 ${j.units}건</span></li>`;
+  }).join("") : `<div class="none">일치하는 직무가 없습니다</div>`;
+  ul.classList.add("open");
+}
+
+function bindCombo(){
+  const q = $("#q"), ul = $("#list");
+  q.oninput = () => { TARGET = ""; $("#picked").textContent = ""; renderList(q.value); };
+  q.onfocus = () => renderList(q.value);
+  ul.onclick = e => {
+    const li = e.target.closest("li");
+    if (!li) return;
+    TARGET = li.dataset.code;
+    q.value = li.dataset.label;
+    $("#picked").textContent = `선택됨 — ${li.dataset.label}`;
+    ul.classList.remove("open");
+  };
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".combo")) ul.classList.remove("open");
+  });
+}
+
 async function boot(){
   const d = await (await fetch("/api/jobs")).json();
   JOBS = d.jobs;
-  $("#target").insertAdjacentHTML("beforeend", JOBS.map(j =>
-    `<option value="${j.code}">정방향 — ${esc(j.name)} (공고 ${j.units}건)</option>`).join(""));
+  bindCombo();
   $("#presets").innerHTML = Object.keys(d.presets).map(k =>
     `<button class="ghost" data-p="${esc(k)}">${esc(k)}</button>`).join("");
   $("#presets").onclick = e => {
@@ -119,8 +187,9 @@ async function boot(){
   };
   $("#llmState").textContent = d.llm
     ? "Upstage 사용" : "규칙 분리 (UPSTAGE_API_KEY 없음)";
+  const n소 = JOBS.filter(j => j.level === "소분류").length;
   $("#hint").innerHTML =
-    `직무 ${JOBS.length}개 · 공공기관 채용공고에서 만든 역량 축과 대조합니다.<br>` +
+    `직무 ${n소}개(세분류 포함 ${JOBS.length}개) · 공공기관 채용공고에서 만든 역량 축과 대조합니다.<br>` +
     `퍼센트를 쓰지 않습니다 — 겹치는 <b>개수</b>와 <b>근거 문장</b>만 보여 줍니다.`;
 }
 
@@ -140,12 +209,16 @@ $("#tidy").onclick = async () => {
 $("#run").onclick = async () => {
   const texts = $("#text").value.split("\n").map(s => s.trim()).filter(Boolean);
   if (!texts.length) return;
+  if (MODE === "fwd" && !TARGET) {
+    $("#picked").textContent = "목록에서 목표 직무를 골라 주세요";
+    return;
+  }
   $("#run").disabled = true;
   $("#right").innerHTML = `<div class="spin">대조하는 중…</div>`;
   try {
     const d = await (await fetch("/api/recommend", {method:"POST",
       headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({texts, target: $("#target").value})})).json();
+      body: JSON.stringify({texts, target: MODE === "fwd" ? TARGET : ""})})).json();
     render(d);
   } catch (e) {
     $("#right").innerHTML = `<div class="empty">요청 실패: ${esc(e.message)}</div>`;

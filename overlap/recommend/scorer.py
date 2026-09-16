@@ -275,11 +275,11 @@ class Recommender:
         비교 직무를 함께 붙이는 이유는 CLAUDE.md 의 대조 원칙이다.
         "부족 12개"만 보여 주면 많은 건지 적은 건지 알 수 없다.
         """
-        code = self.resolve(target)
+        code, matrix = self.resolve(target)
         res = self.profile(texts)
-        tgt = self.compare(res, self.matrix[code], lack_limit)
+        tgt = self.compare(res, matrix[code], lack_limit)
         near = [m for m in self.reverse_from(res, limit=neighbors + 1)
-                if m.code != code][:neighbors]
+                if m.code != code[:6]][:neighbors]
         return GapReport(tgt, near, [s for s, _ in res.unmatched],
                          self.market_signals(res))
 
@@ -330,7 +330,7 @@ class Recommender:
         seen 에 넣은 직무와 같은 대분류는 전부 뺀다. 정보통신을 보고 있던
         사람에게 정보통신 옆칸을 권하는 건 '뜻밖'이 아니다.
         """
-        blocked = {self.resolve(s)[:2] for s in seen}
+        blocked = {self.resolve(s)[0][:2] for s in seen}
         res = self.profile(texts)
         out = []
         for m in self.reverse_from(res, limit=limit * 8, **kw):
@@ -343,16 +343,44 @@ class Recommender:
 
     # ── 보조
 
-    def resolve(self, target: str) -> str:
-        """코드/이름 → 소분류 코드."""
+    def resolve(self, target: str):
+        """코드/이름 → (코드, 그 코드가 든 행렬).
+
+        소분류(6자리)와 세분류(8자리) 둘 다 목표가 될 수 있다.
+        잘 모르겠으면 소분류를, 희망 직무가 구체적이면 세분류를 고른다.
+        """
         t = (target or "").strip()
-        if t in self.matrix:
-            return t
-        for p in self.matrix:
-            if p.name == t:
-                return p.code
+        for m in (self.matrix, self.sub_matrix):
+            if m is None:
+                continue
+            if t in m:
+                return t, m
+            for p in m:
+                if p.name == t:
+                    return p.code, m
         if self.taxonomy:
             n = self.taxonomy.lookup(t, level=3)
-            if n:
-                return n
+            if n and n[0] in self.matrix:
+                return n[0], self.matrix
         raise KeyError(f"직무를 찾을 수 없습니다: {target}")
+
+    def targets(self) -> list[dict]:
+        """정방향에서 고를 수 있는 목표 목록. 소분류 + 그 아래 세분류.
+
+        화면에서 검색으로 찾을 수 있게 `label` 에 상위 이름을 붙여 둔다 —
+        `정보기술전략· 계획 › 빅데이터분석` 처럼.
+        """
+        out = [{"code": p.code, "name": p.name, "label": p.name,
+                "units": p.units, "level": "소분류", "parent": ""}
+               for p in self.matrix]
+        for p in (self.sub_matrix or []):
+            parent = self.matrix.profiles.get(p.code[:6])
+            if parent is None:
+                continue
+            out.append({"code": p.code, "name": p.name,
+                        "label": f"{parent.name} › {p.name}",
+                        "units": p.units, "level": "세분류",
+                        "parent": parent.name})
+        out.sort(key=lambda x: (x["parent"] or x["name"], x["level"] != "소분류",
+                                -x["units"]))
+        return out

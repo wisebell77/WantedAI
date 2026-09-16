@@ -54,9 +54,12 @@ class Engine:
         self.lock = threading.Lock()                     # 모델은 동시 호출에 안전하지 않다
 
     def jobs(self) -> list[dict]:
-        return sorted(({"code": p.code, "name": p.name, "units": p.units,
-                        "institutions": p.institutions}
-                       for p in self.rec.matrix), key=lambda x: -x["units"])
+        """정방향에서 고를 수 있는 목표. 소분류 + 그 아래 세분류.
+
+        잘 모르겠으면 소분류를, 희망 직무가 구체적이면 세분류를 고른다.
+        목록이 122개라 화면에서 검색으로 좁힌다.
+        """
+        return self.rec.targets()
 
     # ── 직렬화 (화면에 나갈 모양 그대로)
 

@@ -241,7 +241,17 @@ class EvidenceIndex:
     # ── 조회
 
     def quotes(self, code: str, node: str, limit: int = 2) -> list[Quote]:
-        rows = self._items.get(code, {}).get(node, [])[:limit]
+        """(직무, 역량) 의 공고 원문.
+
+        세분류 코드(8자리)로 물으면 상위 소분류(6자리) 것을 돌려준다.
+        근거 인덱스는 소분류 단위로만 만든다 — 세분류까지 만들면 (직무, 역량)
+        쌍이 11,113 → 57,600 으로 늘어 파일이 다섯 배가 된다.
+        세분류 단위는 소분류 단위의 부분집합이므로 같은 공고 풀에서 나온다.
+        """
+        rows = self._items.get(code, {}).get(node, [])
+        if not rows and len(code) == 8:
+            rows = self._items.get(code[:6], {}).get(node, [])
+        rows = rows[:limit]
         return [Quote(r["t"], r["n"],
                       tuple(self._source(d) for d in r.get("d", [])))
                 for r in rows]
