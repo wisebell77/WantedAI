@@ -54,7 +54,7 @@ class InterviewSession:
             res = llm.chat_json(_Q_SYSTEM.format(name=self.persona["name"], prompt=self.persona["system_prompt"]),
                                 {"item": {k: it[k] for k in ("label", "jd_quote", "kind")},
                                  "doc_review": self.review.get(it["id"], {}).get("feedback", "")},
-                                fast=True)
+                                fast=True, label="면접 질문")
             q = (res or {}).get("question")
         if not q:
             q = f"공고에 '{it['jd_quote']}'라는 내용이 있습니다. 이와 관련해 직접 해 본 경험을 말씀해 주세요."
@@ -71,7 +71,7 @@ class InterviewSession:
         if self.use_llm:
             res = llm.chat_json(_E_SYSTEM.format(name=self.persona["name"]),
                                 {"item": {k: it[k] for k in ("label", "jd_quote", "followup")},
-                                 "answer": answer})
+                                 "answer": answer}, label="답변 채점")
             if res and isinstance(res.get("score"), (int, float)):
                 ev = res.get("evidence", "")
                 score = int(res["score"])

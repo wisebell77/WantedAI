@@ -4,9 +4,9 @@
     from persona import load_roles, build_rubric, review_letter, InterviewSession
 """
 from .data import load_roles, get_role, job_market
-from .rubric import build_rubric, to_interview_rubric
+from .rubric import build_rubric, load_or_build, to_interview_rubric
 from .doc_review import review_letter
 from .interview import InterviewSession
 
-__all__ = ["load_roles", "get_role", "job_market", "build_rubric",
+__all__ = ["load_roles", "get_role", "job_market", "build_rubric", "load_or_build",
            "to_interview_rubric", "review_letter", "InterviewSession"]

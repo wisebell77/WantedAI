@@ -9,7 +9,7 @@ UPSTAGE_API_KEY 가 .env 에 있으면 LLM, 없으면 규칙 기반으로 돈다
 """
 import argparse
 
-from persona import InterviewSession, build_rubric, get_role, llm, review_letter
+from persona import InterviewSession, get_role, llm, load_or_build, review_letter
 
 LETTER = (
     "저는 학부 캡스톤에서 산업용 카메라 영상 뷰어를 C++로 개발했습니다. "
@@ -43,7 +43,7 @@ def main():
     if llm.available() and not args.interactive:
         print("※ AI 모드는 질문이 매번 달라져 미리 적어둔 답변과 어긋날 수 있습니다. --interactive 로 직접 답해 보세요.")
     doc = get_role(args.role)
-    rub = build_rubric(doc)
+    rub = load_or_build(doc)
 
     line(f"① 채점표 · {rub['persona']['name']} ({rub['generated_by']})")
     for it in rub["items"]:

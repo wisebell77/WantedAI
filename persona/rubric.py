@@ -7,18 +7,22 @@
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 
 from . import llm
-from .data import RoleDoc, job_market
+from .data import ROOT, RoleDoc, job_market
 from .grounding import verify_quote
 
 KIND_WEIGHT = {"required": 1.0, "duty": 0.8, "preferred": 0.6}
 MAX_ITEMS = 6
+LLM_TEXT = 4000  # 채점표 추출 때 보내는 본문 상한 (길수록 느려짐)
+CACHE_DIR = os.path.join(ROOT, "out", "rubrics")
 
 _BULLET = re.compile(r"^\s*(?:[-•·ㆍ*○●▶▪■□◦]|\d+[.)])\s*")
 _INLINE = re.compile(r"^\s*(주요\s*업무|담당\s*업무|필요\s*역량|자격\s*요건|지원\s*자격|우대\s*사항|우대)\s*[:：]\s*(.+)")
-_SKIP = re.compile(r"(병역|결격|해외여행|쿠키|채용\s*절차|전형|접수|마감|근무지|연봉|복리|학사\s*이상|학력|졸업|채용\s*시\s*까지|장애인|보훈|취업지원|유의|문의|합격|내규|미충족|제출|허위|어학성적|기간|지원하|해당 시|입사|영업비밀|개인정보|^전공)")
+_SKIP = re.compile(r"(병역|결격|해외여행|쿠키|채용\s*절차|전형|접수|마감|근무지|연봉|복리|학사\s*이상|학력|졸업|채용\s*시\s*까지|장애인|보훈|취업지원|유의|문의|합격|내규|미충족|제출|허위|어학성적|기간|지원하|해당 시|입사|영업비밀|개인정보|^전공|\d{1,2}\s*\(\s*[월화수목금토일]\s*\)|\d+\s*시\s*~)")
 _STOP = {"및", "등", "관련", "경험", "이해", "능력", "역량", "보유", "우대", "가능", "업무",
          "있는", "분", "자", "이상", "대한", "위한", "활용", "기반", "통한"}
 
@@ -115,7 +119,8 @@ _SYSTEM = (
 
 def _llm_items(doc: RoleDoc) -> list[dict]:
     res = llm.chat_json(_SYSTEM, {"company": doc.corp, "role": doc.role, "job": doc.job,
-                                  "techs": doc.techs, "posting_text": doc.text})
+                                  "techs": doc.techs, "posting_text": doc.text[:LLM_TEXT]},
+                       label=f"채점표 {doc.corp}")
     good = []
     for it in (res or {}).get("items", []):
         if it.get("kind") not in KIND_WEIGHT or not verify_quote(it.get("jd_quote", ""), doc.text):
@@ -160,6 +165,29 @@ def build_rubric(doc: RoleDoc, use_llm: bool = True) -> dict:
     }
     return {"rubric_id": doc.role_id, "version": 1, "generated_by": source,
             "posting": doc.to_dict(), "persona": persona, "items": items}
+
+
+def cache_path(role_id: str) -> str:
+    return os.path.join(CACHE_DIR, f"{role_id}.json")
+
+
+def load_or_build(doc: RoleDoc, use_llm: bool = True, refresh: bool = False) -> dict:
+    """저장된 채점표가 있으면 재사용, 없으면 만들어 저장한다.
+    채점표는 공고가 바뀌지 않는 한 같으므로 매번 AI를 부를 필요가 없다.
+    AI 사용 중인데 저장본이 규칙 기반이면 다시 만든다."""
+    path = cache_path(doc.role_id)
+    want_llm = use_llm and llm.available()
+    if os.path.exists(path) and not refresh:
+        with open(path, encoding="utf-8") as f:
+            cached = json.load(f)
+        if cached.get("generated_by") == "llm" or not want_llm:
+            return cached
+    rub = build_rubric(doc, use_llm=use_llm)
+    if rub["generated_by"] == "llm" or not want_llm:  # 실패한 결과는 저장하지 않는다
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(rub, f, ensure_ascii=False, indent=2)
+    return rub
 
 
 def to_interview_rubric(rubric: dict) -> list[dict]:

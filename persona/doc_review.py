@@ -68,7 +68,8 @@ _SYSTEM = (
 def _llm(rubric: dict, letter: str, experiences: list[str]) -> list[dict] | None:
     res = llm.chat_json(_SYSTEM.format(persona=rubric["persona"]["name"]), {
         "rubric": [{k: it[k] for k in ("id", "label", "jd_quote", "kind")} for it in rubric["items"]],
-        "cover_letter": letter, "experiences": experiences})
+        "cover_letter": letter, "experiences": experiences},
+        label=f"서류심사 {rubric['posting'].get('corp', '')}")
     if not res:
         return None
     by_id = {r.get("id"): r for r in res.get("items", [])}
