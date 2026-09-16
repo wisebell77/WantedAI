@@ -72,7 +72,7 @@ class JobMatrix:
 
         dictionary 를 주면 역량을 L2 군집 대표로 접는다.
         """
-        from ..competency.normalize import L1Normalizer
+        from ..competency.normalize import L1Normalizer, is_noise
         norm = L1Normalizer()
         fold = dictionary.fold if dictionary else (lambda x: x)
 
@@ -84,7 +84,7 @@ class JobMatrix:
                 continue
             s = {fold(norm(x)) for k in settings.sections
                  for x in u.sections.get(k, [])}
-            s = {x for x in s if len(x) >= 2}
+            s = {x for x in s if not is_noise(x)}
             if len(s) < 5:
                 continue
             by[code].append(s)

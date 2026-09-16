@@ -199,9 +199,12 @@ function render(d){
     <div class="meta">문장 ${d.sentences.length}개 → 역량 노드 ${d.nodes.length}개</div>
     <div style="margin-top:8px">${d.nodes.map(n => `<span class="pill">${esc(n)}</span>`).join("")}</div>
     ${d.unmatched.length ? `<div class="note" style="margin-top:14px">
-      <b>사전에 못 붙인 문장 ${d.unmatched.length}개</b> — 억지로 붙이면 말이 안 되는
-      근거가 되므로 버립니다. 반복해서 쌓이면 확장 노드 후보가 됩니다.<br>
-      ${d.unmatched.slice(0,4).map(esc).join("<br>")}</div>` : ""}
+      <b>못 읽은 문장 ${d.unmatched.length}개</b> — 가장 가까운 역량도 충분히 가깝지
+      않아 버렸습니다. 억지로 붙이면 말이 안 되는 근거가 됩니다.
+      반복해서 쌓이면 확장 노드 후보가 됩니다.
+      ${d.unmatched.slice(0,4).map(u =>
+        `<div style="margin-top:6px">최고 유사도 ${u.best} — ${esc(u.text)}</div>`
+      ).join("")}</div>` : ""}
   </div>`;
   $("#right").innerHTML = h;
 }

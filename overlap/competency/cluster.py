@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import SETTINGS
-from .normalize import L1Normalizer
+from .normalize import L1Normalizer, is_noise
 
 
 @dataclass
@@ -116,7 +116,10 @@ class L2Clusterer:
         groups: dict[int, list[str]] = defaultdict(list)
         for w, g in zip(core, labels):
             groups[int(g)].append(w)
-        rep = {g: max(ws, key=lambda w: (df[w], -len(w)))
+        # 대표는 **잔해가 아닌 것 중에서** 고른다. 빈도만 보고 고르면
+        # `데이터분석능력전기사용분석기술…` 같은 잔해가 군집 이름이 되고,
+        # 그 군집으로 접힌 멀쩡한 항목들까지 화면에서 잔해로 보인다.
+        rep = {g: max(ws, key=lambda w: (not is_noise(w), df[w], -len(w)))
                for g, ws in groups.items()}
         mapping = {w: rep[g] for g, ws in groups.items() for w in ws}
 

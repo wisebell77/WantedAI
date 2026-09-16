@@ -16,7 +16,7 @@
 
             분모를 단순 평균으로 잡으면 안 된다. 질의는 직무마다
             단위 수만큼 나오므로, 아무 편향이 없어도 예측 1위의 평균 단위 수는
-            질의 가중 평균(지금 데이터에서 172)에 수렴한다. 여기서 한 번 잘못 읽고
+            질의 가중 평균(지금 데이터에서 229)에 수렴한다. 여기서 한 번 잘못 읽고
             상위 150 을 300 보다 낫다고 판단한 적이 있다.
 
 이 평가의 한계는 분명하다. 질의도 직무기술서, 프로파일도 직무기술서라
@@ -65,7 +65,7 @@ class InDomainEvaluator:
 
     >>> ev = InDomainEvaluator(units)
     >>> ev.run(top_k=300, min_df=1)
-    <top_k=300 min_df=1 Top-1 69.8% MRR 0.798 편향 0.90 (질의 3,152)>
+    <top_k=300 min_df=1 Top-1 70.2% MRR 0.797 편향 0.89 (질의 4,323)>
     """
 
     def __init__(self, units, dictionary=None, settings=SETTINGS,

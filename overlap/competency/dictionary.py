@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ..config import PATHS
 from .cluster import ClusterResult
+from .normalize import is_noise
 
 
 @dataclass
@@ -45,7 +46,12 @@ class CompetencyDictionary:
         self._map = dict(clusters.mapping)
         self._groups = dict(clusters.groups)
         self.extension_nodes = dict(extensions or {})  # 노드명 → 상위(빈 문자열이면 신설)
-        self._names = sorted(set(self._groups) | set(self.extension_nodes))
+        # 잔해 노드는 투영 후보에서 뺀다. 두면 top_k 자리를 잡아먹는다 —
+        # 실제로 `티잉크라운드클럽휴대및전달` 이 유사도 0.451 로 통과해
+        # 맞는 역량 하나를 밀어냈다.
+        self._names = sorted({n for n in (set(self._groups)
+                                          | set(self.extension_nodes))
+                              if not is_noise(n)})
 
     # ── 생성
 

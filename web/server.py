@@ -99,7 +99,8 @@ class Engine:
             res = self.rec.profile(texts)
             out = {"sentences": Recommender.sentences(texts),
                    "nodes": sorted(res.nodes),
-                   "unmatched": [s for s, _ in res.unmatched],
+                   "unmatched": [{"text": s, "best": round(b, 3)}
+                                 for s, b in res.unmatched],
                    "market": [self._market(s)
                               for s in self.rec.market_signals(res)]}
             if target:
