@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runCareerCoachAgent } from "./upstage-career-coach.js";
+import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
+import { evaluateInterviewWithUpstage, runCareerCoachAgent } from "./upstage-career-coach.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dist = join(root, "dist");
@@ -63,6 +65,42 @@ async function readJson(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
   catch { const error = new Error("INVALID_JSON"); error.code = "INVALID_JSON"; throw error; }
 }
+async function readBody(req, limit = 120 * 1024 * 1024) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) { const error = new Error("AUDIO_TOO_LARGE"); error.code = "AUDIO_TOO_LARGE"; throw error; }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+function transcriptionPrompt(job) {
+  if (!job) return "";
+  const terms = [job.companyName, job.positionTitle, ...(job.requiredSkills || []), ...(job.preferredSkills || []), ...(job.responsibilities || [])]
+    .filter(Boolean).join(" ").replace(/\s+/g, " ");
+  return `다음은 지원 면접의 회사 및 직무 용어입니다. 발화에 나온 용어를 가능한 그대로 전사하세요. ${terms}`.slice(0, 900);
+}
+async function transcribeWithFasterWhisper(audio, prompt = "") {
+  const workDir = await mkdtemp(join(tmpdir(), "overlap-stt-"));
+  const audioPath = join(workDir, "answer.webm");
+  const python = process.env.PYTHON_BIN || join(root, ".venv", "bin", "python");
+  try {
+    await writeFile(audioPath, audio);
+    const output = await new Promise((resolve, reject) => {
+      const child = spawn(python, [join(root, "server", "transcribe.py"), audioPath, prompt], { stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("error", reject);
+      child.on("close", (code) => code === 0 ? resolve(stdout) : reject(new Error(stderr || "FASTER_WHISPER_FAILED")));
+    });
+    return JSON.parse(output);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
 const validModes = new Set(["timeline", "task_prioritization", "jd_tagging", "cover_letter_guide", "consultation", "interview_feedback"]);
 function fallbackActions(input) {
   const skills = input.jobContext.requiredSkills.slice(0, 3).join(", ") || "공고의 필수 조건";
@@ -110,6 +148,25 @@ function normalizeAgentResult(result, input) {
     modelUsed: result.modelUsed
   };
 }
+function normalizeInterviewResult(result) {
+  if (!Array.isArray(result?.feedback) || !result.feedback.length) {
+    const error = new Error("INTERVIEW_RESPONSE_INVALID");
+    error.code = "INTERVIEW_RESPONSE_INVALID";
+    throw error;
+  }
+  return {
+    feedback: result.feedback.slice(0, 4).map((item) => ({
+      label: String(item.label || "면접 답변"),
+      title: String(item.title || "답변 확인"),
+      body: String(item.body || "답변의 근거를 한 문장 더 구체적으로 설명해 보세요."),
+      type: item.type === "good" ? "good" : "improve"
+    })),
+    followupQuestion: typeof result.followupQuestion === "string" ? result.followupQuestion : "이 답변에서 본인이 직접 내린 판단과 그 근거를 구체적으로 설명해 주세요.",
+    evidence: Array.isArray(result.evidence) ? result.evidence.filter((item) => item?.source && item?.quote).map((item) => ({ source: String(item.source), quote: String(item.quote) })) : [],
+    missingInformation: Array.isArray(result.missingInformation) ? result.missingInformation.map(String) : [],
+    modelUsed: result.modelUsed
+  };
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -150,6 +207,34 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 502, { error: "AGENT_UPSTREAM_ERROR" });
       }
     }
+    if (req.method === "POST" && url.pathname === "/api/v1/agent/interview-feedback") {
+      if (!process.env.UPSTAGE_API_KEY) return sendJson(res, 503, { error: "UPSTAGE_API_KEY_MISSING" });
+      const input = await readJson(req);
+      const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
+      if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
+      if (!input.question?.trim()) return sendJson(res, 422, { error: "QUESTION_REQUIRED" });
+      if (!input.transcript?.trim()) return sendJson(res, 422, { error: "TRANSCRIPT_REQUIRED" });
+      try {
+        const result = await evaluateInterviewWithUpstage({ ...input, jobContext: canonicalJob }, {
+          apiKey: process.env.UPSTAGE_API_KEY,
+          coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
+        });
+        return sendJson(res, 200, normalizeInterviewResult(result));
+      } catch (error) {
+        console.error("Interview agent upstream error:", error.message);
+        return sendJson(res, 502, { error: "INTERVIEW_AGENT_UPSTREAM_ERROR" });
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/api/v1/interview/transcribe") {
+      const audio = await readBody(req);
+      if (!audio.length) return sendJson(res, 422, { error: "AUDIO_REQUIRED" });
+      const job = contexts.find((row) => row.postingId === url.searchParams.get("postingId"));
+      try { return sendJson(res, 200, await transcribeWithFasterWhisper(audio, transcriptionPrompt(job))); }
+      catch (error) {
+        console.error("Faster-whisper error:", error.message);
+        return sendJson(res, 503, { error: "FASTER_WHISPER_UNAVAILABLE" });
+      }
+    }
     const requested = url.pathname === "/" ? "/coach.html" : url.pathname;
     const filePath = normalize(join(dist, requested));
     if (!filePath.startsWith(dist)) return sendJson(res, 403, { error: "FORBIDDEN" });
@@ -158,6 +243,7 @@ const server = createServer(async (req, res) => {
     res.end(file);
   } catch (error) {
     if (error.code === "INVALID_JSON") return sendJson(res, 400, { error: "INVALID_JSON" });
+    if (error.code === "AUDIO_TOO_LARGE") return sendJson(res, 413, { error: "AUDIO_TOO_LARGE" });
     if (error.code === "ENOENT") return sendJson(res, 404, { error: "NOT_FOUND" });
     console.error(error);
     sendJson(res, 500, { error: "INTERNAL_ERROR" });

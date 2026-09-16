@@ -51,5 +51,25 @@ export async function runCareerCoachAgent(input, options) {
 }
 
 export async function evaluateInterviewWithUpstage(input, options) {
-  return runCareerCoachAgent({ ...input, mode: "interview_feedback", message: "면접 답변을 JD와 루브릭 근거로 평가해줘." }, options);
+  const model = options.coachModel || "solar-pro4";
+  const system = [
+    "당신은 선택된 직무의 한국어 면접 코치다.",
+    "제공된 채용공고와 면접 답변만 사실로 취급한다.",
+    "공고에 없는 요구사항이나 답변에 없는 경험을 만들어내지 않는다.",
+    "합격 가능성, 성격, 외모, 민감한 개인 특성을 판단하지 않는다.",
+    "전달 지표는 말하기 연습을 위한 참고 정보일 뿐 채용 판단 근거로 쓰지 않는다.",
+    "반드시 JSON만 반환한다.",
+    "형식: {feedback:[{label:string,title:string,body:string,type:'good'|'improve'}],followupQuestion:string,evidence:[{source:string,quote:string}],missingInformation:string[]}.",
+    "feedback은 2~4개로 작성하고, JD와 답변의 연결을 가장 중요하게 평가한다. evidence에는 실제 JD 또는 답변의 짧은 인용만 넣는다."
+  ].join(" ");
+  const result = await callUpstage([
+    { role: "system", content: system },
+    { role: "user", content: JSON.stringify({
+      selectedJob: input.jobContext,
+      question: input.question,
+      answer: input.transcript,
+      deliveryMetrics: input.deliveryMetrics || {}
+    }) }
+  ], { ...options, model });
+  return { ...result, modelUsed: model };
 }

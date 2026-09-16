@@ -6,6 +6,7 @@
     <meta name="description" content="직무 근거와 실제 답변 데이터를 바탕으로 면접 연습을 돕는 Overlap 인터뷰 코치 MVP" />
     <title>Overlap Interview Lab</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./overlay.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,7 +15,7 @@
           <span>Overlap</span>
         </a>
         <div class="topbar-meta">
-          <span class="privacy-note">로컬 Whisper 전사</span>
+          <span class="privacy-note">로컬 서버 전사</span>
           <a class="session-id" href="./coach.html">AI 코치</a>
         </div>
       </header>
@@ -51,7 +52,7 @@
 
             <div class="boundary-note">
               <span aria-hidden="true">◇</span>
-              <p>첫 실행 시 Whisper 모델을 내려받습니다.</p>
+              <p>첫 전사 시 모델을 내려받을 수 있습니다.</p>
             </div>
           </aside>
 
@@ -59,7 +60,7 @@
             <div class="question-row">
               <div>
                 <span class="question-count"><b id="question-number">1</b> / 3</span>
-                <h2 id="question-text">데이터로 문제를 정의하고 해결했던 경험을 설명해 주세요.</h2>
+                <h2 id="question-text">면접 시작을 누르면 질문이 공개됩니다.</h2>
               </div>
               <button id="next-question" class="icon-button" type="button" aria-label="다음 질문">→</button>
             </div>
@@ -68,17 +69,27 @@
               <video id="camera" autoplay muted playsinline></video>
               <div id="camera-placeholder" class="camera-placeholder">
                 <div class="lens" aria-hidden="true"><span></span></div>
-                <p>카메라와 마이크를 연결하면<br />Whisper로 답변을 전사합니다.</p>
+                <p>카메라와 마이크를 연결한 뒤<br />면접을 시작해 주세요.</p>
                 <button id="enable-camera" class="secondary-button" type="button">카메라 연결</button>
               </div>
               <div class="frame-guide" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
               <div class="recording-badge" id="recording-badge"><span></span> REC</div>
               <div class="timer" id="timer">00:00</div>
+              <aside id="recording-checklist" class="recording-checklist" hidden>
+                <h3>녹화 전 확인</h3>
+                <ul>
+                  <li>상반신과 양쪽 어깨가 화면에 보이나요?</li>
+                  <li>다른 사람이 화면에 나오지 않는 환경인가요?</li>
+                  <li>얼굴이 밝고, 카메라가 눈높이에 있나요?</li>
+                  <li>주변 소음과 알림을 줄였나요?</li>
+                </ul>
+              </aside>
               <div class="live-caption" id="live-caption" aria-live="polite"></div>
             </div>
 
             <div class="control-dock">
               <div class="device-state"><span id="device-dot"></span><b id="device-label">장치 연결 전</b></div>
+              <button id="start-interview-button" class="secondary-button" type="button" disabled>면접 시작</button>
               <button id="record-button" class="record-button" type="button" disabled>
                 <span class="record-icon"></span>
                 <span id="record-label">답변 녹화 시작</span>
@@ -115,9 +126,19 @@
             <section id="recording-card" class="recording-card" hidden>
               <div class="card-heading">
                 <div><h2>녹화 다시 보기</h2></div>
-                <span class="source-badge">이 브라우저에서만 보관</span>
+                <button id="overlay-toggle" type="button" disabled>랜드마크 표시</button>
               </div>
-              <video id="recording-playback" controls playsinline></video>
+              <div class="recording-review-layout">
+                <div id="playback-wrap" class="playback-wrap">
+                  <video id="recording-playback" controls playsinline></video>
+                  <canvas id="landmark-overlay" hidden aria-label="MediaPipe 랜드마크 오버레이"></canvas>
+                </div>
+                <aside class="video-analysis-panel">
+                  <div class="video-feedback-heading"><h3>영상 전달 피드백</h3><span id="vision-status" class="source-badge"></span></div>
+                  <div id="video-live-indicators" class="video-live-indicators"></div>
+                  <div id="video-feedback-list" class="feedback-list"></div>
+                </aside>
+              </div>
               <p class="card-intro">녹화본은 이 브라우저에만 임시 보관됩니다.</p>
             </section>
 
@@ -127,7 +148,7 @@
                 <span id="transcript-source" class="source-badge">직접 입력</span>
               </div>
               <label class="sr-only" for="transcript-input">답변 텍스트</label>
-              <textarea id="transcript-input" placeholder="Whisper 전사가 실패했거나 수정이 필요하면 여기에 답변을 붙여 넣으세요."></textarea>
+              <textarea id="transcript-input" placeholder="전사가 실패했거나 수정이 필요하면 여기에 답변을 붙여 넣으세요."></textarea>
               <button id="reanalyze-button" class="text-button" type="button">텍스트 다시 분석 →</button>
             </section>
 

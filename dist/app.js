@@ -46,8 +46,10 @@ const roleData = {
 const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
-  transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, whisperWorker: null, transcribing: false,
-  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null
+  transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, transcribing: false,
+  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null,
+  preparing: false, preparationTimer: null, preparationEndsAt: 0, questionRevealed: false,
+  vision: null, visionStatus: "대기", visionSampleId: null, visionLastAt: 0, visual: null, overlayVisible: false, overlayFrame: null, overlayLastTime: -1
 };
 
 async function loadJobContext() {
@@ -68,7 +70,7 @@ async function loadJobContext() {
 function updateRole() {
   const data = roleData[$("role-select").value];
   $("signal-title").textContent = data.signal;
-  $("question-text").textContent = data.questions[state.question];
+  $("question-text").textContent = state.questionRevealed ? data.questions[state.question] : "면접 시작을 누르면 질문이 공개됩니다.";
   $("question-number").textContent = state.question + 1;
   $("rubric-list").innerHTML = data.rubric.map((item, i) => `<li><span>0${i + 1}</span>${item.label}</li>`).join("");
 }
@@ -81,11 +83,11 @@ async function enableCamera() {
     });
     $("camera").srcObject = state.stream;
     $("camera-placeholder").hidden = true;
-    $("record-button").disabled = false;
+    $("start-interview-button").disabled = false;
     $("device-label").textContent = "카메라 · 마이크 연결됨";
     $("device-label").parentElement.classList.add("connected");
     setupAudioMeter();
-    setupWhisper();
+    setupVision();
   } catch (error) {
     $("camera-placeholder").querySelector("p").textContent = "권한을 확인할 수 없습니다. 브라우저 주소창에서 카메라와 마이크를 허용해 주세요.";
   }
@@ -99,70 +101,26 @@ function setupAudioMeter() {
   source.connect(state.analyser);
 }
 
-function setupWhisper() {
-  if (state.whisperWorker) return;
-  state.whisperWorker = new Worker("./whisper-worker.js", { type: "module" });
-  state.whisperWorker.onmessage = (event) => {
-    const { type, progress, text, message } = event.data;
-    if (type === "progress" && typeof progress?.progress === "number") {
-      $("live-caption").textContent = `Whisper 모델 준비 중 ${Math.round(progress.progress)}%`;
-    }
-    if (type === "ready") {
-      $("live-caption").textContent = "Whisper 준비 완료. 답변을 시작해 보세요.";
-    }
-    if (type === "transcribing") {
-      $("live-caption").textContent = "Whisper가 답변을 전사하고 있습니다.";
-    }
-    if (type === "complete") {
-      state.transcribing = false;
-      state.transcript = text.trim();
-      $("record-label").textContent = "한 번 더 녹화";
-      $("record-button").disabled = false;
-      $("finish-button").disabled = false;
-      $("live-caption").textContent = state.transcript
-        ? "Whisper 전사가 완료됐습니다. 분석 결과를 확인해 보세요."
-        : "전사된 텍스트가 없습니다. 분석 화면에서 직접 입력할 수 있어요.";
-    }
-    if (type === "error") {
-      state.transcribing = false;
-      $("record-label").textContent = "한 번 더 녹화";
-      $("record-button").disabled = false;
-      $("finish-button").disabled = false;
-      $("live-caption").textContent = `Whisper 전사에 실패했습니다. 분석 화면에서 직접 입력할 수 있어요.`;
-      console.error(message);
-    }
-  };
-  state.whisperWorker.postMessage({ type: "load" });
-}
-
-async function transcribeWithWhisper(blob) {
+async function transcribeWithFasterWhisper(blob) {
   try {
-    if (!state.whisperWorker) setupWhisper();
-    const audio = await blobToMono16k(blob);
-    state.whisperWorker.postMessage({ type: "transcribe", audio: audio.buffer }, [audio.buffer]);
+    const postingId = state.jobContext?.postingId || new URLSearchParams(window.location.search).get("postingId") || "";
+    const response = await fetch(`/api/v1/interview/transcribe?postingId=${encodeURIComponent(postingId)}`, { method: "POST", headers: { "Content-Type": blob.type || "video/webm" }, body: blob });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "TRANSCRIPTION_FAILED");
+    state.transcript = result.text.trim();
+    state.transcribing = false;
+    $("record-label").textContent = "한 번 더 녹화";
+    $("record-button").disabled = false;
+    $("finish-button").disabled = false;
+    $("live-caption").textContent = state.transcript ? "faster-whisper medium 전사가 완료됐습니다." : "전사된 텍스트가 없습니다. 직접 입력할 수 있어요.";
   } catch (error) {
     state.transcribing = false;
     $("record-label").textContent = "한 번 더 녹화";
     $("record-button").disabled = false;
     $("finish-button").disabled = false;
-    $("live-caption").textContent = "오디오를 Whisper 전사용으로 준비하지 못했습니다. 분석 화면에서 직접 입력할 수 있어요.";
+    $("live-caption").textContent = "faster-whisper 전사에 실패했습니다. 직접 입력할 수 있어요.";
     console.error(error);
   }
-}
-
-async function blobToMono16k(blob) {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  const decoder = new AudioContextClass();
-  const decoded = await decoder.decodeAudioData(await blob.arrayBuffer());
-  const offline = new OfflineContextClass(1, Math.ceil(decoded.duration * 16000), 16000);
-  const source = offline.createBufferSource();
-  source.buffer = decoded;
-  source.connect(offline.destination);
-  source.start();
-  const rendered = await offline.startRendering();
-  await decoder.close();
-  return rendered.getChannelData(0);
 }
 
 function startSampling() {
@@ -184,7 +142,253 @@ function startSampling() {
   }, 120);
 }
 
+async function setupVision() {
+  if (state.vision) return;
+  state.visionStatus = "모델 불러오는 중";
+  try {
+    const { FilesetResolver, FaceLandmarker, HandLandmarker, GestureRecognizer, PoseLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/+esm");
+    const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm");
+    const baseOptions = (modelAssetPath) => ({ modelAssetPath });
+    state.vision = {
+      face: await FaceLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"), runningMode: "VIDEO", outputFaceBlendshapes: true }),
+      hand: await HandLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"), runningMode: "VIDEO", numHands: 2 }),
+      gesture: await GestureRecognizer.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task"), runningMode: "VIDEO", numHands: 2 }),
+      pose: await PoseLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"), runningMode: "VIDEO", numPoses: 1 }),
+      faceConnections: FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+      poseConnections: PoseLandmarker.POSE_CONNECTIONS
+    };
+    state.visionStatus = "분석 완료 · 최대 10fps";
+    if (state.recording) startVisionSampling();
+  } catch (error) {
+    state.visionStatus = "모델 로딩 실패";
+    console.warn("MediaPipe를 불러오지 못했습니다.", error);
+  }
+}
+
+function emptyVisual() {
+  return { frames: 0, faceMissing: 0, offCenter: 0, handsVisible: 0, gestures: {}, poseMissing: 0, shouldersOffCenter: 0, shoulderTiltFrames: 0, armMoves: 0, lastWristCenter: null, lastArmMoveAt: 0, samples: [], blinks: 0, eyeFrames: 0, eyesClosed: false, mouthFrames: 0, mouthFrownFrames: 0, upperBodyMoves: 0, lastShoulderCenter: null, lastUpperBodyMoveAt: 0 };
+}
+
+function startVisionSampling() {
+  state.visual ||= emptyVisual();
+  if (!state.vision || state.visionSampleId) return;
+  state.visionLastAt = 0;
+  const sample = (now) => {
+    if (!state.recording) { state.visionSampleId = null; return; }
+    if (now - state.visionLastAt >= 100 && state.stream && $("camera").readyState >= 2) {
+      state.visionLastAt = now;
+      collectVisionFrame(now);
+    }
+    state.visionSampleId = requestAnimationFrame(sample);
+  };
+  state.visionSampleId = requestAnimationFrame(sample);
+}
+
+function collectVisionFrame(now) {
+  const visual = state.visual;
+  visual.frames += 1;
+  const face = state.vision.face.detectForVideo($("camera"), now);
+  const hand = state.vision.hand.detectForVideo($("camera"), now);
+  const gesture = state.vision.gesture.recognizeForVideo($("camera"), now);
+  const pose = state.vision.pose.detectForVideo($("camera"), now);
+  const landmarks = face.faceLandmarks?.[0];
+  if (!landmarks) visual.faceMissing += 1;
+  else {
+    if (Math.abs((landmarks[1]?.x ?? .5) - .5) > .22) visual.offCenter += 1;
+    const eyeRatio = (eye) => (Math.hypot(landmarks[eye[1]].x - landmarks[eye[5]].x, landmarks[eye[1]].y - landmarks[eye[5]].y) + Math.hypot(landmarks[eye[2]].x - landmarks[eye[4]].x, landmarks[eye[2]].y - landmarks[eye[4]].y)) / (2 * Math.hypot(landmarks[eye[0]].x - landmarks[eye[3]].x, landmarks[eye[0]].y - landmarks[eye[3]].y));
+    const openness = (eyeRatio([33, 160, 158, 133, 153, 144]) + eyeRatio([362, 385, 387, 263, 373, 380])) / 2;
+    visual.eyeFrames += 1;
+    if (openness < .19) visual.eyesClosed = true;
+    if (openness > .22 && visual.eyesClosed) { visual.blinks += 1; visual.eyesClosed = false; }
+    const frown = face.faceBlendshapes?.[0]?.categories?.filter((item) => item.categoryName.startsWith("mouthFrown")).reduce((highest, item) => Math.max(highest, item.score), 0) || 0;
+    visual.mouthFrames += 1;
+    if (frown > .2) visual.mouthFrownFrames += 1;
+  }
+  if (hand.handLandmarks?.length) visual.handsVisible += 1;
+  const poseLandmarks = pose.landmarks?.[0];
+  if (!poseLandmarks) visual.poseMissing += 1;
+  else {
+    const shoulderCenter = ((poseLandmarks[11]?.x ?? .5) + (poseLandmarks[12]?.x ?? .5)) / 2;
+    if (Math.abs(shoulderCenter - .5) > .22) visual.shouldersOffCenter += 1;
+    const shoulderPoint = [shoulderCenter, ((poseLandmarks[11]?.y ?? .5) + (poseLandmarks[12]?.y ?? .5)) / 2];
+    const moved = visual.lastShoulderCenter && Math.hypot(shoulderPoint[0] - visual.lastShoulderCenter[0], shoulderPoint[1] - visual.lastShoulderCenter[1]) > .035;
+    if (moved && now - visual.lastUpperBodyMoveAt > 700) { visual.upperBodyMoves += 1; visual.lastUpperBodyMoveAt = now; }
+    visual.lastShoulderCenter = shoulderPoint;
+    if (Math.abs((poseLandmarks[11]?.y ?? .5) - (poseLandmarks[12]?.y ?? .5)) > .055) visual.shoulderTiltFrames += 1;
+    const wristCenter = [((poseLandmarks[15]?.x ?? .5) + (poseLandmarks[16]?.x ?? .5)) / 2, ((poseLandmarks[15]?.y ?? .5) + (poseLandmarks[16]?.y ?? .5)) / 2];
+    const armsMoved = visual.lastWristCenter && Math.hypot(wristCenter[0] - visual.lastWristCenter[0], wristCenter[1] - visual.lastWristCenter[1]) > .05;
+    if (armsMoved && now - visual.lastArmMoveAt > 500) { visual.armMoves += 1; visual.lastArmMoveAt = now; }
+    visual.lastWristCenter = wristCenter;
+  }
+  gesture.gestures?.forEach((items) => {
+    const name = items[0]?.categoryName;
+    if (name && name !== "None") visual.gestures[name] = (visual.gestures[name] || 0) + 1;
+  });
+  visual.samples.push({
+    time: (Date.now() - state.startedAt) / 1000,
+    face: landmarks?.map(({ x, y, z }) => [x, y, z]),
+    hands: hand.handLandmarks?.map((points) => points.map(({ x, y }) => [x, y])),
+    pose: poseLandmarks?.map(({ x, y }) => [x, y]),
+    faceCentered: Boolean(landmarks) && Math.abs((landmarks[1]?.x ?? .5) - .5) <= .22,
+    handCount: hand.handLandmarks?.length || 0,
+    shoulderTilt: Boolean(poseLandmarks) && Math.abs((poseLandmarks[11]?.y ?? .5) - (poseLandmarks[12]?.y ?? .5)) > .055,
+    blinks: visual.blinks,
+    blinkRate: Math.round((visual.blinks / Math.max(.1, (Date.now() - state.startedAt) / 1000)) * 60),
+    upperBodyMoves: visual.upperBodyMoves,
+    mouthFrownPercent: Math.round((visual.mouthFrownFrames / Math.max(1, visual.mouthFrames)) * 100)
+  });
+}
+
+function videoFeedback() {
+  const visual = state.visual;
+  if (!visual?.frames) return [];
+  const percent = (value) => Math.round((value / visual.frames) * 100);
+  const result = [];
+  if (visual.faceMissing) result.push(["화면 유지", `얼굴이 감지되지 않은 구간이 ${percent(visual.faceMissing)}%입니다. 해당 시점의 영상을 다시 확인해 보세요.`]);
+  if (visual.offCenter) result.push(["프레임 위치", `얼굴이 화면 중심에서 벗어난 구간이 ${percent(visual.offCenter)}%입니다.`]);
+  if (visual.poseMissing) result.push(["상체 감지", `상체가 감지되지 않은 구간이 ${percent(visual.poseMissing)}%입니다. 카메라 높이와 거리를 확인해 보세요.`]);
+  else if (visual.shouldersOffCenter) result.push(["상체 위치", `어깨 중심이 화면 중앙에서 벗어난 구간이 ${percent(visual.shouldersOffCenter)}%입니다.`]);
+  if (visual.eyeFrames) result.push(["눈 깜빡임", `랜드마크 기준으로 눈 깜빡임이 ${visual.blinks}회(${Math.round((visual.blinks / Math.max(1, state.duration)) * 60)}회/분) 감지됐습니다. 조명·안경·카메라 각도에 따라 달라질 수 있습니다.`]);
+  if (visual.mouthFrames) result.push(["입꼬리 방향", `입꼬리 아래 방향 랜드마크 신호가 ${percent(visual.mouthFrownFrames)}% 구간에서 나타났습니다. 표정의 좋고 나쁨이 아닌 녹화 확인용 신호입니다.`]);
+  if (visual.upperBodyMoves) result.push(["상체 움직임", `어깨 중심이 크게 이동한 구간이 ${visual.upperBodyMoves}회 감지됐습니다. 녹화본과 오버레이를 함께 확인해 보세요.`]);
+  if (visual.shoulderTiltFrames) result.push(["어깨 기울기", `양쪽 어깨 높이 차이가 큰 구간이 ${percent(visual.shoulderTiltFrames)}%입니다.`]);
+  if (visual.armMoves) result.push(["팔 움직임", `양쪽 손목 중심이 크게 이동한 구간이 ${visual.armMoves}회 감지됐습니다.`]);
+  result.push(["손 노출", `손이 화면에 보인 구간은 ${percent(visual.handsVisible)}%입니다.`]);
+  const gestures = Object.entries(visual.gestures).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  if (gestures.length) result.push(["손동작", `감지된 손동작: ${gestures.map(([name, count]) => `${name} ${count}회`).join(", ")}`]);
+  return result;
+}
+
+function drawPoints(context, points, color, radius = 2) {
+  context.fillStyle = color;
+  points?.forEach(([x, y, z = 0]) => {
+    context.globalAlpha = Math.max(.3, Math.min(1, 1 - z));
+    context.beginPath();
+    context.arc(x * context.canvas.width, y * context.canvas.height, radius, 0, Math.PI * 2);
+    context.fill();
+  });
+  context.globalAlpha = 1;
+}
+
+function drawLines(context, points, links, color) {
+  if (!points) return;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  links?.forEach((link) => {
+    const [a, b] = Array.isArray(link) ? link : [link.start, link.end];
+    if (!points[a] || !points[b]) return;
+    context.beginPath();
+    context.moveTo(points[a][0] * context.canvas.width, points[a][1] * context.canvas.height);
+    context.lineTo(points[b][0] * context.canvas.width, points[b][1] * context.canvas.height);
+    context.stroke();
+  });
+}
+
+function drawOverlayMetrics(context, sample) {
+  const lines = [`눈 깜빡임  ${sample.blinks}회 · ${sample.blinkRate}회/분`, `상체 이동  ${sample.upperBodyMoves}회`, `입꼬리 아래 방향 신호  ${sample.mouthFrownPercent}%`];
+  const size = Math.max(14, Math.round(context.canvas.width / 52));
+  context.fillStyle = "rgba(0, 0, 0, .68)";
+  context.fillRect(16, 16, Math.min(context.canvas.width - 32, size * 20), size * 4.6);
+  context.fillStyle = "#fff";
+  context.font = `600 ${size}px Arial, sans-serif`;
+  lines.forEach((line, index) => context.fillText(line, 16 + size, 16 + size * (1.15 + index * 1.1)));
+}
+
+function renderLiveIndicators(sample) {
+  $("video-live-indicators").innerHTML = [
+    ["얼굴 위치", sample.faceCentered ? "중앙 유지" : "위치 확인"],
+    ["눈", `${sample.blinks}회 · ${sample.blinkRate}회/분`],
+    ["상체", `${sample.upperBodyMoves}회 이동${sample.shoulderTilt ? " · 기울어짐" : ""}`],
+    ["손", sample.handCount ? `${sample.handCount}개 감지` : "화면 밖"],
+    ["입 주변", `아래 방향 ${sample.mouthFrownPercent}%`]
+  ].map(([label, value]) => `<article><span>${label}</span><b>${value}</b></article>`).join("");
+}
+
+function renderOverlay() {
+  const video = $("recording-playback");
+  const canvas = $("landmark-overlay");
+  if (!video.videoWidth || !state.visual?.samples?.length) return;
+  let sample = state.visual.samples[0];
+  for (const item of state.visual.samples) {
+    if (item.time > video.currentTime) break;
+    sample = item;
+  }
+  renderLiveIndicators(sample);
+  if (!state.overlayVisible) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  drawPoints(context, sample.face, "#35d4ff", 1.5);
+  drawLines(context, sample.face, state.vision?.faceConnections, "rgba(53, 212, 255, .5)");
+  sample.hands?.forEach((hand) => {
+    drawLines(context, hand, [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20]], "#ffbf3f");
+    drawPoints(context, hand, "#ffbf3f", 3);
+  });
+  drawLines(context, sample.pose, state.vision?.poseConnections, "#9aff77");
+  drawPoints(context, sample.pose, "#9aff77", 3);
+  drawOverlayMetrics(context, sample);
+}
+
+function syncPlaybackOverlay() {
+  const video = $("recording-playback");
+  if (video.videoWidth && video.videoHeight) $("playback-wrap").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+  state.overlayLastTime = -1;
+  renderOverlay();
+}
+
+function runOverlayLoop() {
+  cancelAnimationFrame(state.overlayFrame);
+  const draw = () => {
+    const time = $("recording-playback").currentTime;
+    if (state.overlayLastTime < 0 || Math.abs(time - state.overlayLastTime) >= .09) {
+      state.overlayLastTime = time;
+      renderOverlay();
+    }
+    if (state.overlayVisible && !$("recording-playback").paused) state.overlayFrame = requestAnimationFrame(draw);
+  };
+  draw();
+}
+
+function toggleOverlay() {
+  state.overlayVisible = !state.overlayVisible;
+  $("landmark-overlay").hidden = !state.overlayVisible;
+  $("overlay-toggle").textContent = state.overlayVisible ? "랜드마크 숨기기" : "랜드마크 표시";
+  if (state.overlayVisible) runOverlayLoop();
+  else cancelAnimationFrame(state.overlayFrame);
+}
+
+function beginInterview() {
+  if (!state.stream) return;
+  state.questionRevealed = true;
+  state.preparing = true;
+  state.preparationEndsAt = Date.now() + 20000;
+  $("start-interview-button").disabled = true;
+  $("record-button").disabled = false;
+  $("record-label").textContent = "준비되면 녹화 시작";
+  $("recording-checklist").hidden = false;
+  updateRole();
+  updatePreparationTimer();
+  state.preparationTimer = setInterval(updatePreparationTimer, 250);
+}
+
+function updatePreparationTimer() {
+  const remaining = Math.max(0, Math.ceil((state.preparationEndsAt - Date.now()) / 1000));
+  $("timer").textContent = `00:${String(remaining).padStart(2, "0")}`;
+  $("live-caption").textContent = `질문을 확인하세요. ${remaining}초 후 녹화가 자동 시작됩니다.`;
+  if (!remaining) {
+    clearInterval(state.preparationTimer);
+    state.preparing = false;
+    startRecording();
+  }
+}
+
 function startRecording() {
+  if (!state.stream) return;
+  if (state.preparing) {
+    clearInterval(state.preparationTimer);
+    state.preparing = false;
+  }
   if (state.recordingUrl) {
     URL.revokeObjectURL(state.recordingUrl);
     state.recordingUrl = null;
@@ -193,12 +397,14 @@ function startRecording() {
   state.transcript = "";
   state.followupText = "";
   state.recordedBlob = null;
+  state.visual = emptyVisual();
   state.recorder = new MediaRecorder(state.stream);
+  $("recording-checklist").hidden = true;
   state.recorder.ondataavailable = (event) => { if (event.data.size) state.chunks.push(event.data); };
   state.recorder.onstop = () => {
     state.recordedBlob = new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" });
     state.recordingUrl = URL.createObjectURL(state.recordedBlob);
-    transcribeWithWhisper(state.recordedBlob);
+    transcribeWithFasterWhisper(state.recordedBlob);
   };
   state.recorder.start();
   state.recording = true;
@@ -209,6 +415,7 @@ function startRecording() {
   $("finish-button").disabled = true;
   state.timerId = setInterval(updateTimer, 250);
   startSampling();
+  startVisionSampling();
 }
 
 function stopRecording() {
@@ -216,6 +423,8 @@ function stopRecording() {
   state.recording = false;
   clearInterval(state.timerId);
   clearInterval(state.sampleId);
+  cancelAnimationFrame(state.visionSampleId);
+  state.visionSampleId = null;
   state.duration = Math.max(1, Math.floor((Date.now() - state.startedAt) / 1000));
   if (state.silenceStartedAt !== null) {
     const finalSilence = performance.now() - state.silenceStartedAt;
@@ -223,12 +432,12 @@ function stopRecording() {
     state.silenceStartedAt = null;
   }
   $("record-button").classList.remove("recording");
-  $("record-label").textContent = "Whisper 전사 중";
+  $("record-label").textContent = "faster-whisper medium 전사 중";
   $("record-button").disabled = true;
   $("recording-badge").style.display = "none";
   $("finish-button").disabled = true;
   state.transcribing = true;
-  $("live-caption").textContent = "녹화가 끝났습니다. Whisper 전사를 시작합니다.";
+  $("live-caption").textContent = "녹화가 끝났습니다. faster-whisper medium 전사를 시작합니다.";
 }
 
 function updateTimer() {
@@ -266,7 +475,7 @@ function analyze() {
   $("filler-value").textContent = `${fillers.length}회`;
   $("voice-value").textContent = volumeValues.length ? (voiceVariation > .025 ? "충분" : "낮음") : "—";
   $("voice-note").textContent = volumeValues.length ? "음량 변화 기준" : "음성 데이터 없음";
-  $("transcript-source").textContent = state.transcript ? "로컬 Whisper 전사" : "직접 입력";
+  $("transcript-source").textContent = state.transcript ? "faster-whisper medium · beam 5" : "직접 입력";
   renderRubricMap(rubricResults);
 
   const strengths = [];
@@ -291,9 +500,20 @@ function analyze() {
     ...strengths.slice(0, 2).map(([title, body]) => feedbackItem("잘 드러난 점", title, body, "good")),
     ...improvements.slice(0, 3).map(([title, body]) => feedbackItem("보완할 점", title, body, "improve"))
   ].join("");
+  renderVideoFeedback();
 
   const followupTarget = [...rubricResults].sort((a, b) => a.score - b.score)[0];
   renderFollowup(followupTarget, Boolean(state.followupText));
+}
+
+function renderVideoFeedback() {
+  const list = $("video-feedback-list");
+  const status = $("vision-status");
+  const items = videoFeedback();
+  status.textContent = state.visionStatus;
+  list.innerHTML = items.length
+    ? items.map(([title, body]) => feedbackItem("영상 신호", title, body, "improve")).join("")
+    : `<p class="card-intro">${state.visionStatus.startsWith("분석 완료") ? "녹화 중 수집된 영상 데이터가 없습니다. 다음 녹화에서 카메라가 보이는지 확인해 주세요." : `영상 분석을 완료하지 못했습니다. 상태: ${state.visionStatus}`}</p>`;
 }
 
 function evaluateRubric(item, text) {
@@ -347,20 +567,17 @@ async function requestAgentFeedback() {
   button.disabled = true;
   $("agent-feedback-status").textContent = "직무 AI 코치가 선택 공고와 답변 근거를 확인하고 있습니다.";
   try {
-    const data = roleData[$("role-select").value];
     const result = await window.CareerCoachAPI.evaluateInterview({
       postingId: state.jobContext?.postingId || null,
-      jobFamily: $("role-select").value,
       question: $("question-text").textContent,
       transcript,
-      rubric: data.rubric.map(({ label, followup }) => ({ label, followup })),
       deliveryMetrics: { durationSeconds: state.duration, longPauses: state.silenceRuns.length }
     });
     $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, item.body, item.type)).join("");
     if (result.followupQuestion) $("followup-context").textContent = result.followupQuestion;
     $("agent-feedback-status").textContent = "직무 AI 코치 피드백이 반영됐습니다.";
   } catch (error) {
-    $("agent-feedback-status").textContent = "AI 코치 서버가 아직 연결되지 않아 MVP 규칙 기반 피드백을 유지합니다.";
+    $("agent-feedback-status").textContent = "AI 코치 피드백을 불러오지 못해 규칙 기반 피드백을 유지합니다.";
     console.error(error);
   } finally {
     button.disabled = false;
@@ -375,6 +592,10 @@ function showResults() {
   if (state.recordingUrl) {
     playback.src = state.recordingUrl;
     recordingCard.hidden = false;
+    state.overlayVisible = false;
+    $("landmark-overlay").hidden = true;
+    $("overlay-toggle").textContent = "랜드마크 표시";
+    $("overlay-toggle").disabled = !state.visual?.samples?.length;
   } else {
     playback.removeAttribute("src");
     recordingCard.hidden = true;
@@ -385,10 +606,12 @@ function showResults() {
 }
 
 function resetPractice() {
+  clearInterval(state.preparationTimer);
   $("result-view").hidden = true;
   $("practice-view").hidden = false;
   $("timer").textContent = "00:00";
   $("live-caption").textContent = "";
+  $("recording-checklist").hidden = true;
   $("finish-button").disabled = true;
   $("transcript-input").value = "";
   $("followup-input").value = "";
@@ -400,13 +623,34 @@ function resetPractice() {
   state.recordingUrl = null;
   state.recordedBlob = null;
   state.followupText = "";
+  state.overlayVisible = false;
+  cancelAnimationFrame(state.overlayFrame);
+  $("landmark-overlay").hidden = true;
+  $("overlay-toggle").disabled = true;
+  state.preparing = false;
+  state.questionRevealed = false;
+  $("start-interview-button").disabled = !state.stream;
+  $("record-button").disabled = true;
+  $("record-label").textContent = "답변 녹화 시작";
+  updateRole();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 $("role-select").addEventListener("change", () => { state.question = 0; state.followupText = ""; updateRole(); });
 $("next-question").addEventListener("click", () => { state.question = (state.question + 1) % 3; updateRole(); });
 $("enable-camera").addEventListener("click", enableCamera);
-$("record-button").addEventListener("click", () => state.recording ? stopRecording() : startRecording());
+$("start-interview-button").addEventListener("click", beginInterview);
+$("overlay-toggle").addEventListener("click", toggleOverlay);
+$("recording-playback").addEventListener("loadedmetadata", syncPlaybackOverlay);
+$("recording-playback").addEventListener("timeupdate", renderOverlay);
+$("recording-playback").addEventListener("seeked", renderOverlay);
+$("recording-playback").addEventListener("play", runOverlayLoop);
+$("recording-playback").addEventListener("pause", () => cancelAnimationFrame(state.overlayFrame));
+$("record-button").addEventListener("click", () => {
+  if (state.recording) stopRecording();
+  else if (state.preparing) startRecording();
+  else if (!state.transcribing) beginInterview();
+});
 $("finish-button").addEventListener("click", showResults);
 $("retry-button").addEventListener("click", resetPractice);
 $("reanalyze-button").addEventListener("click", analyze);
