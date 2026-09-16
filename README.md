@@ -33,9 +33,9 @@
 LLM 키 **없이도** 동작한다(휴리스틱 fallback). 있으면 판정 품질이 올라간다.
 
 ```bash
-python demo.py     # 합성 샘플 (데이터 불필요)
-python nudge.py    # 실제 공고로 엔진(fit·커버판정·넛지·우선순위) 시연 (data/overlap/ 필요)
-python tracker.py  # 담아두고 날짜별로 추적 (저장/복원) 시연
+python demo.py         # 합성 샘플 (데이터 불필요)
+python run_nudge.py    # 실제 공고로 엔진(fit·커버판정·넛지·우선순위) 시연 (data/overlap/ 필요)
+python run_tracker.py  # 담아두고 날짜별로 추적 (저장/복원) 시연
 ```
 
 LLM 판정을 쓰려면:
@@ -58,7 +58,7 @@ assistant/
   nudge.py           ③ 넛지 + 오늘의 목표 (미충족 역량을 어느 문항에 넣을지까지)
   overlap_loader.py  실제 Overlap 공고 데이터 → 엔진 모델 변환
   tracker.py         담아둔 공고+자소서 보관 & 일자별 진행 스냅샷 (저장/복원)
-demo.py / nudge.py / tracker.py   (실행 스크립트)
+demo.py / run_nudge.py / run_tracker.py   (실행 스크립트 — 루트=실행, assistant/=부품)
 data/                로컬 전용 (⚠ .gitignore — Overlap 데이터·자소서 보관본 커밋 금지)
 ```
 
@@ -84,8 +84,7 @@ Overlap 수집 공고 본문은 **내부 검토용이며 외부 재배포 금지
 - [x] 자소서 **문항별** 입력 구조 + 넛지가 어느 문항에 넣을지 안내
 - [x] **오늘 할 일 브리핑** (여러 공고 종합 → 한 가지 집중 + 마감 경보)
 - [x] 진행도 스냅샷 기록 (`tracker.py` — 여러 날 추이, 저장/복원)
-- [x] **LLM 연동 (코드)** — `.env` 키 로드 + 판정/넛지 LLM 승격 배선 완료
-- [ ] └ 실제 키로 end-to-end 검증 (사용자 실행 대기: `python nudge.py`)
+- [x] **LLM 실연동 완료** — `.env` 키로 판정·넛지·fit·트래킹 모두 LLM 동작 확인
 - [ ] FastAPI / 데모 UI
 
 ### 아직 mock / 미완인 값
@@ -102,3 +101,10 @@ Overlap 수집 공고 본문은 **내부 검토용이며 외부 재배포 금지
 
 - 휴리스틱 판정은 `파이썬` vs `Python` 같은 표기 차이를 못 잡는다 → LLM 판정이 해결.
 - 코퍼스가 제조/경영지원 편중(제조 130 : IT 36)이라 IT/데이터 공고 수가 적다.
+
+### 환경 트러블슈팅 (LLM "Connection error" 시)
+
+일부 환경(anaconda base 등)에서 응답 압축 해제 버그로 연결이 실패할 수 있다. 대응:
+- `pip install -U httpcore` (1.0.9+)
+- 코드가 `Accept-Encoding: identity` 로 압축을 끄고 요청한다(`assistant/llm.py`) — 정상 환경엔 무해.
+- 그래도 안 되면 깨끗한 venv 사용: `python -m venv .venv` → 활성화 → `pip install anthropic`.

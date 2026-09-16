@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .llm import LLMClient
+from .llm import LLMClient, record_llm_fail, record_llm_ok
 from .models import CoverageStatus, EssayDraft, PostingAnalysis
 
 # 미충족 역량을 넣기 좋은 문항을 고를 때 우선하는 키워드(강점/경험 계열)
@@ -50,9 +50,11 @@ def make_nudge(
     target = _target_section(essay)
     if client is not None:
         try:
-            return _nudge_with_llm(analysis, client, target)
-        except Exception:
-            pass
+            result = _nudge_with_llm(analysis, client, target)
+            record_llm_ok()
+            return result
+        except Exception as e:
+            record_llm_fail(e)
     return _nudge_template(analysis, target)
 
 

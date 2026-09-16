@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .llm import LLMClient
+from .llm import LLMClient, record_llm_fail, record_llm_ok
 from .models import (
     Competency,
     CoverageResult,
@@ -67,10 +67,12 @@ def judge_coverage(
     """공고의 요구 역량 각각에 대해 자소서 커버 여부를 판정."""
     if client is not None:
         try:
-            return _judge_with_llm(posting, essay, client)
-        except Exception:
-            # 호출 실패 시에도 데모가 멈추지 않도록 휴리스틱으로 강등
-            pass
+            result = _judge_with_llm(posting, essay, client)
+            record_llm_ok()
+            return result
+        except Exception as e:
+            # 호출 실패 시에도 데모가 멈추지 않도록 휴리스틱으로 강등(단, 기록은 남긴다)
+            record_llm_fail(e)
     return _judge_heuristic(posting, essay)
 
 

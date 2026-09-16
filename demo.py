@@ -25,6 +25,7 @@ from assistant import (
     Posting,
     analyze,
     get_default_client,
+    llm_stats_summary,
     make_nudge,
     rank,
 )
@@ -119,6 +120,8 @@ def main() -> None:
         a = item.analysis
         print(f"  {i}. {a.posting.company} {a.posting.role}  "
               f"(점수 {item.score}) — {item.reason}")
+
+    print(f"\n[판정 집계] {llm_stats_summary()}")
 
 
 if __name__ == "__main__":

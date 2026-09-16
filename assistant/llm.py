@@ -47,6 +47,36 @@ def _load_dotenv() -> None:
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 
+# ── LLM 사용 집계 ────────────────────────────────────────────
+# LLM이 실제로 쓰였는지(성공) vs 조용히 휴리스틱으로 내려갔는지(실패)를
+# 눈에 보이게 하기 위한 카운터. 실패 시 마지막 에러도 남긴다.
+LLM_STATS = {"ok": 0, "fail": 0, "last_error": ""}
+
+
+def record_llm_ok() -> None:
+    LLM_STATS["ok"] += 1
+
+
+def record_llm_fail(err: object) -> None:
+    LLM_STATS["fail"] += 1
+    LLM_STATS["last_error"] = str(err)[:200]
+
+
+def reset_llm_stats() -> None:
+    LLM_STATS.update(ok=0, fail=0, last_error="")
+
+
+def llm_stats_summary() -> str:
+    """한 줄 요약. 데모 끝에 찍어 LLM이 실제로 돌았는지 확인용."""
+    ok, fail = LLM_STATS["ok"], LLM_STATS["fail"]
+    if ok == 0 and fail == 0:
+        return "LLM 호출 없음 (휴리스틱 전용)"
+    msg = f"LLM 성공 {ok}건 / 실패 {fail}건(→휴리스틱)"
+    if fail and LLM_STATS["last_error"]:
+        msg += f"  ⚠ 마지막 에러: {LLM_STATS['last_error']}"
+    return msg
+
+
 class LLMClient(Protocol):
     """엔진이 기대하는 최소 인터페이스."""
 
@@ -59,7 +89,13 @@ class AnthropicClient:
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL):
         import anthropic  # 지연 import: 패키지 없어도 fallback 경로엔 영향 없음
 
-        self._client = anthropic.Anthropic(api_key=api_key)
+        # Accept-Encoding: identity → 응답을 압축 없이 받게 한다.
+        # 일부 환경(anaconda base 등)의 httpx/decompressor가 압축 해제에서
+        # 'output_buffer_limit' TypeError 로 죽는 문제를 우회한다. 정상 환경에도 무해.
+        self._client = anthropic.Anthropic(
+            api_key=api_key,
+            default_headers={"Accept-Encoding": "identity"},
+        )
         self._model = model
 
     def complete_json(self, system: str, user: str) -> dict:

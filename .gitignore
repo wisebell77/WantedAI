@@ -4,6 +4,9 @@ data/
 *.env
 .env
 
+# 일회성 연결 진단 스크립트 (로컬 전용)
+diag_*.py
+
 # Python
 __pycache__/
 *.py[cod]

@@ -1,6 +1,6 @@
 """ApplicationTracker 데모 — 담아두고, 이어서 쓰고, 날짜별로 추적.
 
-    python tracker.py
+    python run_tracker.py
 
 포인트:
   1. 자소서는 '한 번' 붙이면 보관된다 → 매일 재입력 X
@@ -18,7 +18,13 @@ from datetime import date, timedelta
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from assistant import ApplicationTracker, make_nudge, rank
+from assistant import (
+    ApplicationTracker,
+    get_default_client,
+    llm_stats_summary,
+    make_nudge,
+    rank,
+)
 from assistant.overlap_loader import load_postings
 
 STORE = os.path.join(os.path.dirname(__file__), "data", "tracker_demo.json")
@@ -30,7 +36,10 @@ EXPERIENCE = (
 
 
 def main() -> None:
-    tracker = ApplicationTracker(store_path=STORE)  # client=None → 휴리스틱
+    # 키 있으면 LLM으로 판정(진행도·fit), 없으면 휴리스틱 — 트래킹 판정도 엔진과 동일
+    client = get_default_client()
+    print(f"판정 모드: {'LLM' if client else '휴리스틱(키 없음)'}\n")
+    tracker = ApplicationTracker(store_path=STORE, client=client)
 
     # 1) 공고 담기 + 경험 한 번 설정
     for p in [pp for pp in load_postings(tier="A", limit=20)
@@ -72,7 +81,7 @@ def main() -> None:
     analyses = tracker.analyze_all(as_of=day3)
     for item in rank(analyses)[:3]:
         a = item.analysis
-        note = make_nudge(a)
+        note = make_nudge(a, client=client)
         print(f"  [{a.posting.company}] D-{a.days_left} · 적합도 {(a.posting.fit_score or 0):.0%} "
               f"· 커버율 {a.coverage_rate:.0%}")
         print(f"    🎯 {note['today_goal']}")
@@ -82,6 +91,8 @@ def main() -> None:
     reloaded = ApplicationTracker.load(STORE)
     print(f"\n저장/복원 OK — 공고 {len(reloaded.postings)}건, "
           f"스냅샷 {len(reloaded.snapshots)}일치 (파일: {os.path.relpath(STORE)})")
+
+    print(f"\n[판정 집계] {llm_stats_summary()}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """실제 Overlap 공고 데이터로 핵심 엔진(fit·커버판정·넛지·우선순위) 돌려보기.
 
-    python nudge.py
+    python run_nudge.py
 
 data/overlap/ 의 실제 A등급 공고를 로드해, 사용자의 경험/자소서와 대조한다.
 - 판정 모드: ANTHROPIC_API_KEY 있으면 LLM, 없으면 휴리스틱
@@ -26,6 +26,7 @@ from assistant import (
     apply_fit,
     daily_briefing,
     get_default_client,
+    llm_stats_summary,
     make_nudge,
     rank,
     render_briefing,
@@ -107,6 +108,8 @@ def main() -> None:
         a = item.analysis
         print(f"  {i}. [{a.posting.company}] {a.posting.role[:24]}  "
               f"(점수 {item.score}) — {item.reason}")
+
+    print(f"\n[판정 집계] {llm_stats_summary()}")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,12 @@ from typing import Optional
 from .briefing import daily_briefing, render_briefing
 from .coverage import judge_coverage
 from .fit import apply_fit, estimate_fit
-from .llm import LLMClient, get_default_client
+from .llm import (
+    LLMClient,
+    get_default_client,
+    llm_stats_summary,
+    reset_llm_stats,
+)
 from .models import (
     Competency,
     CoverageResult,
@@ -53,6 +58,8 @@ __all__ = [
     "Snapshot",
     "LLMClient",
     "get_default_client",
+    "llm_stats_summary",
+    "reset_llm_stats",
     "analyze",
 ]
 
