@@ -19,6 +19,14 @@
             질의 가중 평균(지금 데이터에서 229)에 수렴한다. 여기서 한 번 잘못 읽고
             상위 150 을 300 보다 낫다고 판단한 적이 있다.
 
+**서비스와 같은 규칙을 쓴다.** is_noise 로 잔해를 거르고 df 가중도 건다.
+한 번 어긋난 적이 있다 — 행렬에만 필터를 넣고 평가는 그대로 뒀더니
+바뀐 걸 안 재고 있었다. 다만 표본 크기 맞춤(profile_unit_cap)은 못 건다.
+leave-one-out 은 매 질의마다 프로파일을 다시 만드는데 거기에 상한을 걸면
+어느 단위가 빠졌는지에 따라 표본이 통째로 달라져 비교가 안 된다.
+그래서 이 지표는 큰 직무에 유리하다 — top_k 처럼 **같은 조건 안에서
+비교하면 되는 값**을 고르는 데만 쓴다.
+
 이 평가의 한계는 분명하다. 질의도 직무기술서, 프로파일도 직무기술서라
 같은 방언끼리 맞춘 것이다. `일정계획준수` 라는 질의가 `일정계획준수` 라는
 프로파일 항목에 문자열로 그대로 걸린다. 실제 사용자는 그렇게 쓰지 않는다.
@@ -32,7 +40,7 @@ import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from ..competency.normalize import L1Normalizer
+from ..competency.normalize import L1Normalizer, is_noise
 from ..config import SETTINGS
 from ..recommend.matrix import JobMatrix
 
@@ -65,7 +73,7 @@ class InDomainEvaluator:
 
     >>> ev = InDomainEvaluator(units)
     >>> ev.run(top_k=300, min_df=1)
-    <top_k=300 min_df=1 Top-1 70.2% MRR 0.797 편향 0.89 (질의 4,323)>
+    <top_k=300 min_df=1 Top-1 68.0% MRR 0.786 편향 0.78 (질의 4,307)>
     """
 
     def __init__(self, units, dictionary=None, settings=SETTINGS,
@@ -82,7 +90,7 @@ class InDomainEvaluator:
             if len(c) != 6:
                 continue
             s = {fold(norm(x)) for k in keys for x in u.sections.get(k, [])}
-            s = {x for x in s if len(x) >= 2}
+            s = {x for x in s if not is_noise(x)}
             if len(s) < 5:                    # 역량이 너무 적은 단위는 질의가 못 된다
                 continue
             by[c].append(s)
@@ -114,12 +122,15 @@ class InDomainEvaluator:
                 appear[i] += 1
         idf = {i: math.log(len(codes) / a) for i, a in appear.items()}
 
-        def profile(df: Counter) -> dict[str, float]:
+        scale = JobMatrix.df_scale(self.settings.df_weight)
+
+        def profile(df: Counter, n: int) -> dict[str, float]:
             items = [(i, v) for i, v in df.items() if v >= min_df]
             items.sort(key=lambda x: -x[1] * idf.get(x[0], 0))
-            return {i: idf.get(i, 0.0) for i, _ in items[:top_k]}
+            return {i: idf.get(i, 0.0) * scale(df.get(i, 1), n)
+                    for i, _ in items[:top_k]}
 
-        base = {c: profile(DF[c]) for c in codes}
+        base = {c: profile(DF[c], self.N[c]) for c in codes}
 
         hit1 = hit3 = total = 0
         rr, pred_n = [], []
@@ -129,7 +140,8 @@ class InDomainEvaluator:
                 loo = DF[true_c].copy()       # leave-one-out
                 for i in q:
                     loo[i] -= 1
-                p_loo = profile(Counter({i: v for i, v in loo.items() if v > 0}))
+                p_loo = profile(Counter({i: v for i, v in loo.items() if v > 0}),
+                                max(self.N[true_c] - 1, 1))
                 sc = {c: (sum(p_loo[i] for i in q if i in p_loo) if c == true_c
                           else sum(base[c][i] for i in q if i in base[c]))
                       for c in codes}

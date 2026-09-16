@@ -36,7 +36,9 @@ class JobProfile:
     name: str
     units: int
     institutions: int
-    weights: dict[str, float] = field(default_factory=dict)   # 역량 → IDF
+    weights: dict[str, float] = field(default_factory=dict)
+    """역량 → 점수 가중치. IDF x (그 직무 안 요구 빈도 계수).
+    IDF 만이 아니다 — settings.df_weight 참고."""
     df: dict[str, int] = field(default_factory=dict)          # 역량 → 등장 단위 수
     sampled: int = 0
     """프로파일을 만들 때 실제로 쓴 단위 수(표본 크기를 맞춘 뒤).
@@ -127,6 +129,7 @@ class JobMatrix:
         n = max(len(keep), 1)
         idf = {i: math.log(n / a) for i, a in appear.items()}
 
+        scale = cls.df_scale(settings.df_weight)
         profiles = {}
         for c in keep:
             items = [(i, v) for i, v in DF[c].items() if v >= settings.min_df]
@@ -139,10 +142,22 @@ class JobMatrix:
                 code=c,
                 name=(taxonomy.name(c) if taxonomy else c),
                 units=len(by[c]), institutions=len(inst[c]),
-                weights={i: idf[i] for i, _ in items},
+                weights={i: idf[i] * scale(FULL[c][i], len(by[c]))
+                         for i, _ in items},
                 df={i: FULL[c][i] for i, _ in items},
                 sampled=len(used[c]))
         return cls(profiles)
+
+    @staticmethod
+    def df_scale(mode: str):
+        """IDF 에 곱할 '그 직무 안 요구 빈도' 계수. 근거는 Settings.df_weight."""
+        if mode == "rate":
+            return lambda df, n: df / max(n, 1)
+        if mode == "sqrt":
+            return lambda df, n: math.sqrt(df / max(n, 1))
+        if mode == "log":
+            return lambda df, n: math.log(1 + df / max(n, 1) * 10)
+        return lambda df, n: 1.0
 
     @staticmethod
     def level_units(rows, cap: int):

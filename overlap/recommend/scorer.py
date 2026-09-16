@@ -286,17 +286,30 @@ class Recommender:
     # ── 역방향
 
     def reverse(self, texts, limit: int = 5, exclude=(),
-                min_overlap: int = 3, lack_limit: int = 10) -> list[JobMatch]:
+                min_overlap: int = 2, lack_limit: int = 10) -> list[JobMatch]:
         return self.reverse_from(self.profile(texts), limit, exclude,
                                  min_overlap, lack_limit)
 
     def reverse_from(self, result: ProjectionResult, limit: int = 5,
-                     exclude=(), min_overlap: int = 3,
+                     exclude=(), min_overlap: int = 2,
                      lack_limit: int = 10) -> list[JobMatch]:
         """겹침이 많은 직무를 위에서부터.
 
-        min_overlap 은 근거 하한이다. 역량 1~2개 겹친 걸 "추천"으로 내보내면
+        min_overlap 은 근거 하한이다. 역량 하나 겹친 걸 "추천"으로 내보내면
         근거 없는 출력이 된다.
+
+        **순위는 점수로 매기고 여기서는 개수로 거른다.** 기준이 둘이라
+        점수 1위가 잘려 나갈 수 있다 — 실제로 `min_overlap=3` 일 때
+        점수 1위(정보기술개발, 1.10)가 겹침 2개라 빠지고 3위가 화면에 올라갔다.
+        사용자 방언 세트로 재니 질의의 **35%가 아예 답을 못 받고 있었다.**
+
+            min_overlap   사용자 Top-1   Top-3   답 못한 질의
+                 3           36.4%      39.8%      35%
+                 2           47.7%      61.4%      12%   <- 이걸 쓴다
+                 1           45.5%      64.2%       8%
+
+        1 까지 내리면 Top-3 는 더 오르지만 Top-1 이 떨어진다.
+        역량 하나만 겹친 직무가 1위로 올라오는 건 근거가 너무 얇다.
         """
         skip = {self.resolve(x) for x in exclude}
         out = []
