@@ -11,7 +11,7 @@
 이 평가를 도입하자 결론이 뒤집혔다.
 
     내부 평가만 봤을 때   L2 는 이득이 없거나 해로워 보였다
-    교차 평가로 재니      L1 31.2%  →  +L2 41.2%  →  +문장투영 57.7%
+    교차 평가로 재니      L1 29.5%  →  +L2 42.8%  →  +문장투영 54.5%
 
 정답은 거칠게 잡는다. 민간 직무의 자체 분류를 NCS 대분류 묶음에 대응시키고,
 예측한 소분류가 그 묶음에 속하면 맞힌 것으로 본다.
@@ -72,9 +72,9 @@ class CrossDomainEvaluator:
 
     >>> ev = CrossDomainEvaluator(units, roles)
     >>> ev.string_match()                     # L1 만
-    <L1만 Top-1 32.0% Top-3 57.5%>
+    <L1만 Top-1 29.5% Top-3 59.6%>
     >>> ev.projection(TextProjector())        # 3절 문장 투영
-    <투영 sim>=0.4 k=5 Top-1 60.3% Top-3 78.8%>
+    <투영 sim>=0.4 k=5 Top-1 54.5% Top-3 74.5%>
     """
 
     def __init__(self, units, roles, settings=SETTINGS, gold=None):
@@ -87,35 +87,23 @@ class CrossDomainEvaluator:
 
     # ── 공공 쪽 프로파일
 
-    def profiles(self, fold=None):
-        fold = fold or (lambda x: x)
-        by: dict[str, list[set[str]]] = defaultdict(list)
-        inst: dict[str, Counter] = defaultdict(Counter)
-        for u in self.units:
-            c = (u.ncs_code or "")[:6]
-            if len(c) != 6:
-                continue
-            s = {fold(self.norm(x)) for k in self.settings.sections
-                 for x in u.sections.get(k, [])}
-            s = {x for x in s if len(x) >= 2}
-            if len(s) >= 5:
-                by[c].append(s)
-                inst[c][u.institution or "?"] += 1
-        keep = [c for c in by
-                if JobMatrix.effective_units(inst[c], self.settings.institution_cap)
-                >= self.settings.min_effective_units
-                and JobMatrix.hhi(inst[c]) < self.settings.max_hhi]
-        DF = {c: Counter(i for s in by[c] for i in s) for c in keep}
-        ap: Counter = Counter()
-        for c in keep:
-            for i in DF[c]:
-                ap[i] += 1
-        idf = {i: math.log(len(keep) / a) for i, a in ap.items()}
-        prof = {}
-        for c in keep:
-            items = sorted(DF[c].items(), key=lambda x: -x[1] * idf[x[0]])
-            prof[c] = {i: idf[i] for i, _ in items[:self.settings.top_k]}
-        return sorted(keep), prof
+    def profiles(self, fold=None, dictionary=None):
+        """**서비스가 쓰는 것과 같은 행렬**을 만든다.
+
+        여기서 직접 만들면 안 된다. 한 번 그렇게 했다가 실제로 데였다 —
+        JobMatrix 에 표본 크기 맞춤(profile_unit_cap)을 넣었는데 평가는
+        자기 행렬을 따로 만들고 있어서 숫자가 소수점까지 똑같이 나왔다.
+        바뀐 걸 안 재고 있었던 것이다.
+
+        평가가 서비스와 다른 걸 재면 그 숫자는 아무 의미가 없다.
+        그래서 JobMatrix.build 를 그대로 부른다.
+        """
+        class _Fold:                                  # fold 만 주어진 경우를 감싼다
+            def __init__(self, f):
+                self.fold = f
+        dic = dictionary or (_Fold(fold) if fold else None)
+        m = JobMatrix.build(self.units, dic, settings=self.settings)
+        return sorted(m.profiles), {c: p.weights for c, p in m.profiles.items()}
 
     # ── 질의 만들기
 
@@ -166,14 +154,14 @@ class CrossDomainEvaluator:
 
     def string_match(self, dictionary=None, label=None) -> CrossScore:
         fold = dictionary.fold if dictionary else None
-        codes, prof = self.profiles(fold)
+        codes, prof = self.profiles(dictionary=dictionary)
         return self.score(self.string_queries(fold), prof, codes,
                           label or ("L1+L2" if dictionary else "L1만"))
 
     def projection(self, projector, dictionary=None, label=None,
                    **kw) -> CrossScore:
-        fold = (dictionary or projector.dict).fold
-        codes, prof = self.profiles(fold)
+        dic = dictionary or projector.dict
+        codes, prof = self.profiles(dictionary=dic)
         sim = kw.get("min_similarity", self.settings.min_similarity)
         k = kw.get("top_k", self.settings.project_top_k)
         return self.score(self.projection_queries(projector, **kw), prof, codes,

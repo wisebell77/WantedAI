@@ -5,6 +5,10 @@
     세분류 1,114종은 표본이 3~9개라 통계가 안 된다.
     소분류 279종에서 개발·기획·운영이 갈린다.
 
+프로파일은 직무당 60단위까지만 쓴다(settings.profile_unit_cap).
+큰 직무가 어휘 폭만으로 이기는 것을 막는다 — 실측 편향배율 2.07 → 1.31.
+근거로 내보내는 공고 수(units)는 줄이지 않는다. 그건 실제 표본 크기다.
+
 포함 기준은 두 가지를 함께 본다.
     유효단위 >= 30   기관당 8단위 상한을 건 뒤의 수
     HHI < 0.25       허핀달 지수. 한 기관 쏠림
@@ -34,6 +38,9 @@ class JobProfile:
     institutions: int
     weights: dict[str, float] = field(default_factory=dict)   # 역량 → IDF
     df: dict[str, int] = field(default_factory=dict)          # 역량 → 등장 단위 수
+    sampled: int = 0
+    """프로파일을 만들 때 실제로 쓴 단위 수(표본 크기를 맞춘 뒤).
+    units 는 근거가 되는 전체 공고 수라 화면에 그대로 쓴다 — 줄이지 않는다."""
 
     def score(self, competencies) -> float:
         return sum(self.weights[c] for c in competencies if c in self.weights)
@@ -76,7 +83,7 @@ class JobMatrix:
         norm = L1Normalizer()
         fold = dictionary.fold if dictionary else (lambda x: x)
 
-        by: dict[str, list[set[str]]] = defaultdict(list)
+        by: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
         inst: dict[str, Counter] = defaultdict(Counter)
         for u in units:
             code = (u.ncs_code or "")[:6]
@@ -87,7 +94,7 @@ class JobMatrix:
             s = {x for x in s if not is_noise(x)}
             if len(s) < 5:
                 continue
-            by[code].append(s)
+            by[code].append((u.institution or "?", s))
             inst[code][u.institution or "?"] += 1
 
         keep = {c for c in by
@@ -95,7 +102,13 @@ class JobMatrix:
                 >= settings.min_effective_units
                 and cls.hhi(inst[c]) < settings.max_hhi}
 
-        DF = {c: Counter(i for s in by[c] for i in s) for c in keep}
+        # 표본 크기를 맞춘다. 큰 직무가 어휘 폭만으로 이기는 것을 막는다.
+        used = {c: cls.level_units(by[c], settings.profile_unit_cap) for c in keep}
+        DF = {c: Counter(i for _, s in used[c] for i in s) for c in keep}
+        # 화면에 쓰는 건수는 전체 코퍼스 기준이어야 한다. 표본을 60 으로 맞춘 건
+        # 선별과 가중치를 공정하게 하려는 것이지, 근거를 줄이려는 게 아니다.
+        # 여기서 안 되돌리면 "공고 37건에서 요구"가 "공고 8건"으로 표기된다.
+        FULL = {c: Counter(i for _, s in by[c] for i in s) for c in keep}
         appear = Counter()
         for c in keep:
             for i in DF[c]:
@@ -116,8 +129,41 @@ class JobMatrix:
                 name=(taxonomy.name(c) if taxonomy else c),
                 units=len(by[c]), institutions=len(inst[c]),
                 weights={i: idf[i] for i, _ in items},
-                df={i: v for i, v in items})
+                df={i: FULL[c][i] for i, _ in items},
+                sampled=len(used[c]))
         return cls(profiles)
+
+    @staticmethod
+    def level_units(rows, cap: int):
+        """직무당 cap 단위만 고른다. 기관을 번갈아 가며.
+
+        무작위로 뽑으면 빌드할 때마다 행렬이 달라져 어제와 오늘 결과를
+        비교할 수 없다. 기관 이름과 등장 순서로 정렬해 **결정적**으로 고른다.
+
+        기관을 번갈아 가는 건 덤이 아니라 핵심이다. 앞에서부터 60개를 자르면
+        공고를 많이 낸 기관이 표본을 통째로 차지한다 — 유효단위·HHI 로
+        막으려던 바로 그 문제가 프로파일 안에서 되살아난다.
+        """
+        if cap <= 0 or len(rows) <= cap:
+            return list(rows)
+        groups: dict[str, list] = defaultdict(list)
+        for institution, s in rows:
+            groups[institution].append(s)
+        order = sorted(groups)                        # 기관 수가 적은 쪽부터가 아니라
+        out, i = [], 0                                # 이름순 — 재현을 위해서다
+        while len(out) < cap:
+            picked = False
+            for institution in order:
+                bucket = groups[institution]
+                if i < len(bucket):
+                    out.append((institution, bucket[i]))
+                    picked = True
+                    if len(out) >= cap:
+                        break
+            if not picked:
+                break
+            i += 1
+        return out
 
     # ── 지표
 
@@ -157,7 +203,7 @@ class JobMatrix:
         p = Path(path or PATHS.job_matrix)
         p.write_text(json.dumps({
             c: {"name": pr.name, "units": pr.units, "institutions": pr.institutions,
-                "weights": pr.weights, "df": pr.df}
+                "sampled": pr.sampled, "weights": pr.weights, "df": pr.df}
             for c, pr in self.profiles.items()}, ensure_ascii=False, indent=1),
             encoding="utf-8")
 
@@ -165,7 +211,8 @@ class JobMatrix:
     def load(cls, path: str | Path | None = None) -> "JobMatrix":
         d = json.loads(Path(path or PATHS.job_matrix).read_text(encoding="utf-8"))
         return cls({c: JobProfile(c, v["name"], v["units"], v["institutions"],
-                                  v["weights"], v["df"]) for c, v in d.items()})
+                                  v["weights"], v["df"], v.get("sampled", 0))
+                    for c, v in d.items()})
 
     def __repr__(self) -> str:
         return f"<JobMatrix 직무 {len(self.profiles)}개>"
