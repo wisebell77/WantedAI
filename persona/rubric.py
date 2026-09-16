@@ -23,6 +23,7 @@ CACHE_DIR = os.path.join(ROOT, "out", "rubrics")
 _BULLET = re.compile(r"^\s*(?:[-•·ㆍ*○●▶▪■□◦]|\d+[.)])\s*")
 _INLINE = re.compile(r"^\s*(주요\s*업무|담당\s*업무|필요\s*역량|자격\s*요건|지원\s*자격|우대\s*사항|우대)\s*[:：]\s*(.+)")
 _SKIP = re.compile(r"(병역|결격|해외여행|쿠키|채용\s*절차|전형|접수|마감|근무지|연봉|복리|학사\s*이상|학력|졸업|채용\s*시\s*까지|장애인|보훈|취업지원|유의|문의|합격|내규|미충족|제출|허위|어학성적|기간|지원하|해당 시|입사|영업비밀|개인정보|^전공|\d{1,2}\s*\(\s*[월화수목금토일]\s*\)|\d+\s*시\s*~)")
+_NOT_SKILL = re.compile(r"(학위|학력|석사|박사|학사|졸업|어학|토익|TOEIC|OPIc|병역)", re.I)
 _STOP = {"및", "등", "관련", "경험", "이해", "능력", "역량", "보유", "우대", "가능", "업무",
          "있는", "분", "자", "이상", "대한", "위한", "활용", "기반", "통한"}
 
@@ -125,6 +126,8 @@ def _llm_items(doc: RoleDoc) -> list[dict]:
     for it in (res or {}).get("items", []):
         if it.get("kind") not in KIND_WEIGHT or not verify_quote(it.get("jd_quote", ""), doc.text):
             continue  # 원문에 없는 인용 = 폐기
+        if _NOT_SKILL.search(it.get("label", "")):
+            continue  # 학력·학위·어학 요건은 역량 항목이 아니다
         good.append(it)
     return good[:MAX_ITEMS]
 

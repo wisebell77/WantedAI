@@ -18,7 +18,9 @@ PROFILES = {
             "자료구조 수업에서 C로 해시 테이블 구현 후 성능 비교 보고서 작성",
             "팀 프로젝트에서 Git으로 협업하며 코드 리뷰 진행",
         ],
-        target_jobs=["개발/SW"], ncs_matches=["정보기술개발"], major="컴퓨터공학"),
+        target_jobs=["개발/SW"], major="컴퓨터공학",
+        # 직무추천 결과 예시 (/api/recommend 응답의 code·name)
+        ncs_matches=[{"code": "200102", "name": "정보기술개발"}]),
     "biz": UserProfile(
         experiences=[
             "회계원리·재무관리 수강, 엑셀로 동아리 예산 결산표를 만들어 매월 보고",
@@ -42,11 +44,14 @@ def main():
     print(catalog.summary())
 
     res = recommend_postings(PROFILES[args.profile], catalog, limit=args.limit)
-    print(f"내 경험에서 찾은 기술: {', '.join(res['user_techs']) or '-'} · 관심 직무군: {', '.join(res['user_jobs'])}\n")
+    print(f"내 경험에서 찾은 기술: {', '.join(res['user_techs']) or '-'} · 관심 직무군: {', '.join(res['user_jobs'])}")
+    for l in res["ncs_link"]:
+        print(f"  직무추천 '{l['ncs']}' → 대분류 {l['major']} {l['major_name']} → {', '.join(l['jobs']) or '연결 없음'} ({l['how']})")
+    print()
     for r in res["results"]:
         dday = f"D-{r['days_left']}" if r["days_left"] is not None else "상시"
         tag = r["status"] + (f" ({', '.join(r['reasons'])})" if r["reasons"] else "")
-        print(f"{r['rank']}. [{tag}] {r['corp']} · {r['role'][:40]}  ({r['job']}, {dday}, 겹침 {r['score']})")
+        print(f"{r['rank']}. [{tag}] {r['corp']} · {r['role'][:40]}  ({r['job']}, {dday})")
         if r["shared_techs"]:
             print(f"   겹치는 기술: {', '.join(r['shared_techs'])}")
         for m in r["matched"][:2]:
@@ -55,7 +60,8 @@ def main():
                 print(f"     ↔ 내 경험 “{m['user_quote'][:45]}”")
         if "review" in r:
             rv = r["review"]
-            print(f"   서류 반영도 {rv['coverage_score']}점 ({rv['generated_by']}) · 준비 필요: {', '.join(rv['to_prepare'][:3]) or '없음'}")
+            print(f"   서류 반영도 {rv['coverage_score']}점 ({rv['generated_by']}) · 경험 겹침 {r['match_score']} → 최종 {r['score']}")
+            print(f"   준비 필요: {', '.join(rv['to_prepare'][:3]) or '없음'}")
         print(f"   원문: {r['url']}\n   → 이 공고로 연습: python demo_persona.py --role {r['role_id']}\n")
     if res["new_without_body"]:
         print("새로 올라왔지만 본문 미수집 (제목 기준 관련):")

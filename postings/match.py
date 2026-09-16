@@ -21,21 +21,10 @@ from persona.grounding import sentences
 from persona.rubric import _heuristic_items
 
 from .catalog import OpenCatalog, OpenRole
+from .ncs_link import link as ncs_link
 
 SYNONYM = {"파이썬": "python", "엑셀": "excel", "자바": "java", "리액트": "react",
            "오라클": "oracle", "리눅스": "linux", "깃": "git", "깃허브": "git", "github": "git"}
-
-# 직무추천(NCS) 결과 → 민간 직무군. 추천 파트와 합의 필요한 임시 표.
-NCS_TO_JOB = {
-    "정보통신": ["개발/SW", "데이터/AI", "IT인프라/보안"], "데이터": ["데이터/AI"],
-    "소프트웨어": ["개발/SW"], "보안": ["IT인프라/보안"],
-    "경영": ["경영지원"], "회계": ["경영지원"], "사무": ["경영지원"], "인사": ["경영지원"],
-    "영업": ["영업/마케팅"], "마케팅": ["영업/마케팅"], "홍보": ["영업/마케팅"],
-    "기계": ["생산/품질", "연구개발"], "재료": ["생산/품질", "연구개발"], "화학": ["생산/품질", "연구개발"],
-    "전기": ["생산/품질", "연구개발"], "전자": ["생산/품질", "연구개발"], "품질": ["생산/품질"],
-    "건설": ["건설/플랜트"], "디자인": ["디자인"], "안전": ["안전/환경"], "환경": ["안전/환경"],
-    "물류": ["물류/SCM"], "교육": ["교육/공공"],
-}
 
 _CAREER = re.compile(r"경력\s*(\d+)\s*년|(\d+)\s*년\s*이상")
 _GRAD = re.compile(r"(석사|박사)\s*(학위)?\s*(이상|소지|보유|취득)")
@@ -45,7 +34,8 @@ _GRAD = re.compile(r"(석사|박사)\s*(학위)?\s*(이상|소지|보유|취득)
 class UserProfile:
     experiences: list[str]
     target_jobs: list[str] = field(default_factory=list)   # 민간 직무군 이름 (예: 개발/SW)
-    ncs_matches: list[str] = field(default_factory=list)  # 직무추천 결과 이름 (예: 정보기술개발)
+    # 직무추천 결과: 코드("200102"), 이름, {"code","name"} dict, JobMatch 객체 모두 가능
+    ncs_matches: list = field(default_factory=list)
     major: str = ""
     newcomer: bool = True
     education: str = "학사"  # 학사 / 석사 / 박사
@@ -54,12 +44,15 @@ class UserProfile:
     def text(self) -> str:
         return "\n".join(self.experiences)
 
+    def job_weight(self, job: str) -> float:
+        if job in self.target_jobs:
+            return 1.0
+        return 0.5 if job in self.jobs() else 0.0
+
     def jobs(self) -> set[str]:
         out = set(self.target_jobs)
-        for name in self.ncs_matches:
-            for key, jobs in NCS_TO_JOB.items():
-                if key in name:
-                    out.update(jobs)
+        for row in ncs_link(self.ncs_matches):
+            out.update(row["jobs"])
         return out
 
 
@@ -138,15 +131,18 @@ def _score(role: OpenRole, user: UserProfile, utech: set[str], tidx: _TechIndex,
     items = len(_heuristic_items(role.doc)) or 1
     req = len(pairs) / items
 
-    jobs = user.jobs()
-    job = 1.0 if role.doc.job in jobs else 0.0
+    job = user.job_weight(role.doc.job)
     major = 1.0 if user.major and user.major in role.doc.text else 0.0
     score = 0.45 * tech + 0.35 * req + 0.2 * job + 0.1 * major
     return min(score, 1.0), shared, pairs
 
 
+ELIGIBILITY_PENALTY = 0.7   # 자격 미충족 공고는 점수 × 0.7 (숨기지는 않음)
+REVIEW_WEIGHT = 0.5         # 정밀 대조한 공고: 최종 = 겹침 × 0.5 + 서류 반영도 × 0.5
+
+
 def recommend_postings(user: UserProfile, catalog: OpenCatalog | None = None, limit: int = 5,
-                       review_top: int = 3, use_llm: bool = True) -> dict:
+                       review_top: int = 5, use_llm: bool = True) -> dict:
     catalog = catalog or OpenCatalog()
     tidx = _TechIndex(catalog.roles)
     utech = tidx.user_techs(user.text)
@@ -157,6 +153,8 @@ def recommend_postings(user: UserProfile, catalog: OpenCatalog | None = None, li
         score, shared, pairs = _score(role, user, utech, tidx, usents)
         if score <= 0:
             continue
+        if _eligibility(role, user):
+            score *= ELIGIBILITY_PENALTY
         ranked.append((score, role, shared, pairs))
     # 같은 공고의 직무가 목록을 도배하지 않게 공고당 1개
     ranked.sort(key=lambda x: (-x[0], x[1].days_left(catalog.today) or 999))
@@ -197,11 +195,20 @@ def recommend_postings(user: UserProfile, catalog: OpenCatalog | None = None, li
         with ThreadPoolExecutor(max_workers=len(top)) as pool:
             for row, rv in zip(top, pool.map(_review, top)):
                 row["review"] = rv
+                pen = ELIGIBILITY_PENALTY if row["reasons"] else 1.0
+                row["match_score"] = row["score"]
+                row["score"] = round((1 - REVIEW_WEIGHT) * row["score"]
+                                     + REVIEW_WEIGHT * pen * rv["coverage_score"] / 100, 3)
+        top.sort(key=lambda r: (-r["score"], r["days_left"] if r["days_left"] is not None else 999))
+        results[:len(top)] = top
+        for i, r in enumerate(results, 1):
+            r["rank"] = i
 
     related_new = [p for p in catalog.no_body
                    if any(_has(t, p.title) for t in utech) or any(j.split("/")[0] in p.title for j in user.jobs())]
     return {
         "catalog": catalog.summary(), "user_techs": sorted(utech), "user_jobs": sorted(user.jobs()),
+        "ncs_link": ncs_link(user.ncs_matches),
         "results": results,
         "new_without_body": [{"corp": p.corp, "title": p.title, "url": p.url,
                               "end": p.end.isoformat() if p.end else ""} for p in related_new[:5]],
