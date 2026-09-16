@@ -12,6 +12,11 @@
 | `alio.py` | `AlioClient`(공시 목록·상세), `PublicCollector`(연도 수집), `NCS_MAJOR` |
 | `attachments.py` | `AttachmentFetcher` — 첨부 다운로드 + PDF/HWP/HWPX/ZIP 텍스트화 |
 | `private.py` | `GongchaeClient`(고용24 공채속보), `PrivateCorpus`(static·browser·ocr 병합) |
+| `jobinfo.py` | `JobInfoClient` — NCS 분류에 **공식 설명**을 붙인다 (고용24 215L01) |
+
+`jobinfo.py` 는 매처가 아니라 **사전**이다. API 매칭이 소박한 문자열 비교라
+`데이터 분석` 을 넣으면 금융 신용등급 사후관리가 나온다. 그래서 이름으로 조회한 뒤
+**코드가 일치하는 것만** 남긴다. 받은 문장은 공식 능력단위 정의 그대로 쓴다.
 
 ## 두 갈래
 

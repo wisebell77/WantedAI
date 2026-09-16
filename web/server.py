@@ -73,6 +73,11 @@ class Engine:
     def _match(cls, m) -> dict:
         return {"code": m.code, "name": m.name, "units": m.units,
                 "institutions": m.institutions, "sentence": m.sentence(),
+                "description": m.description,
+                "subdivisions": [{"name": s.name, "units": s.units,
+                                  "overlap": s.overlap,
+                                  "description": s.description}
+                                 for s in m.subdivisions],
                 "have": [cls._evidence(e) for e in m.have],
                 "lack": [cls._evidence(e) for e in m.lack],
                 "postings": [{"label": p.source.label(), "url": p.source.url,

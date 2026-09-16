@@ -56,6 +56,28 @@ class Evidence:
         return ""
 
 
+@dataclass(frozen=True)
+class Subdivision:
+    """소분류 **안에서** 어느 세분류에 더 가까운가.
+
+    단독 추천이 아니다. `정보기술전략·계획` 을 권한 다음
+    "그 안에서는 빅데이터분석 쪽입니다" 라고 한 단계 좁혀 주는 것이다.
+    NCS 이름만으로는 안 와닿는데, 세분류까지 내려가면 훨씬 구체적이 된다.
+
+    표본이 작아 순위를 단독 근거로 쓰면 안 된다. 그래서 단위 수를 같이 낸다.
+    """
+
+    code: str
+    name: str
+    units: int
+    overlap: int
+    description: str = ""
+
+    def sentence(self) -> str:
+        return (f"{self.name} — 겹치는 역량 {self.overlap}개 "
+                f"(이 세분류 공고 {self.units}건)")
+
+
 @dataclass
 class JobMatch:
     """직무 하나와의 대조 결과."""
@@ -67,6 +89,8 @@ class JobMatch:
     have: list[Evidence] = field(default_factory=list)   # 겹치는 역량
     lack: list[Evidence] = field(default_factory=list)   # 요구되는데 없는 역량
     postings: list[RelatedPosting] = field(default_factory=list)  # 대표 공고
+    subdivisions: list[Subdivision] = field(default_factory=list)  # 세분류 순위
+    description: str = ""                                # 이 분류가 무슨 일인가
     score: float = 0.0                                   # 정렬용. 화면에 쓰지 않는다
 
     @property
@@ -105,8 +129,19 @@ class Recommender:
 
     def __init__(self, matrix: JobMatrix | None = None,
                  projector: TextProjector | None = None,
-                 taxonomy=None, evidence: EvidenceIndex | None = None):
+                 taxonomy=None, evidence: EvidenceIndex | None = None,
+                 sub_matrix: JobMatrix | None = None, descriptions=None):
+        from ..config import PATHS
         self.matrix = matrix or JobMatrix.load()
+        # 세분류 행렬과 설명은 **있으면 쓰고 없으면 조용히 건너뛴다.**
+        # 둘 다 화면을 풍부하게 하는 것이지 추천 순위에는 영향을 주지 않는다.
+        if sub_matrix is None and PATHS.sub_matrix.exists():
+            sub_matrix = JobMatrix.load(PATHS.sub_matrix)
+        self.sub_matrix = sub_matrix
+        if descriptions is None:
+            from ..collect.jobinfo import DescriptionStore
+            descriptions = DescriptionStore.load()
+        self.descriptions = descriptions
         self.projector = projector or TextProjector()
         self.taxonomy = taxonomy
         self.evidence = evidence if evidence is not None else EvidenceIndex.load()
@@ -171,12 +206,46 @@ class Recommender:
             if len(lack) >= lack_limit:
                 break
 
-        return JobMatch(profile.code, profile.name, profile.units,
-                        profile.institutions, have, lack,
-                        self.evidence.postings(profile.code,
-                                               [e.competency for e in have],
-                                               postings),
-                        profile.score(nodes))
+        # 위치 인자로 넘기지 않는다. 필드를 하나 끼워 넣었을 때 score 가
+        # subdivisions 자리로 들어가는 사고가 났다.
+        return JobMatch(
+            code=profile.code, name=profile.name, units=profile.units,
+            institutions=profile.institutions, have=have, lack=lack,
+            postings=self.evidence.postings(
+                profile.code, [e.competency for e in have], postings),
+            subdivisions=self.subdivisions(nodes, profile.code),
+            description=self.describe(profile.code),
+            score=profile.score(nodes))
+
+    # ── 한 단계 더 좁히기
+
+    def subdivisions(self, nodes, code: str, limit: int = 3,
+                     min_overlap: int = 2) -> list[Subdivision]:
+        """소분류 안에서 어느 세분류에 더 가까운가.
+
+        `정보기술전략·계획` 을 권한 다음 "그 안에서는 빅데이터분석 쪽입니다"
+        까지 내려가야 이름이 와닿는다. 실제로 그 소분류 안에 빅데이터분석이
+        34단위 들어 있는데, 소분류까지만 보면 그게 안 보인다.
+
+        **단독 추천이 아니다.** 이미 고른 소분류 안의 줄 세우기다.
+        표본이 작아 단독 근거로 쓰면 안 되므로 단위 수를 같이 낸다.
+        """
+        if self.sub_matrix is None:
+            return []
+        out = []
+        for p in self.sub_matrix:
+            if not p.code.startswith(code):
+                continue
+            hit = p.matched(nodes)
+            if len(hit) >= min_overlap:
+                out.append(Subdivision(p.code, p.name, p.units, len(hit),
+                                       self.describe(p.code)))
+        out.sort(key=lambda s: (-s.overlap, -s.units))
+        return out[:limit]
+
+    def describe(self, code: str) -> str:
+        """이 분류가 무슨 일인지. 공식 능력단위 정의에서 온 문장뿐이다."""
+        return self.descriptions.summary(code) if self.descriptions else ""
 
     def market_signals(self, result: ProjectionResult,
                        limit: int = 5) -> list[MarketSignal]:

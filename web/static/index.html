@@ -48,6 +48,12 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
 .post .why{color:var(--dim);font-size:12px}
 .pill{display:inline-block;background:#1e2430;color:var(--dim);border-radius:20px;
   padding:3px 10px;margin:3px 5px 0 0;font-size:12px}
+.does{background:#12161d;border-left:2px solid var(--accent);border-radius:0 6px 6px 0;
+  padding:8px 12px;margin:10px 0;font-size:13px;color:#c4cbd6}
+.does b{color:var(--accent);font-weight:600;margin-right:6px}
+.does.sm{font-size:12.5px;margin:5px 0 0;border-left-color:var(--line)}
+.sub{padding:9px 0;border-top:1px solid var(--line)}
+.sub.top b{color:var(--good)}
 .note{background:#1a1510;border:1px solid #3a2c18;color:#e8d5b5;
   border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:16px}
 .empty{color:var(--dim);padding:40px 0;text-align:center}
@@ -155,6 +161,15 @@ function matchCard(m, isTarget=false){
   return `<div class="card">
     <h3>${esc(m.name)}</h3>
     <div class="meta">${esc(m.sentence)}</div>
+    ${m.description ? `<div class="does"><b>하는 일</b> ${esc(m.description)}</div>` : ""}
+    ${m.subdivisions?.length ? `<div class="sec">이 안에서는 어느 쪽인가</div>
+      ${m.subdivisions.map((s, i) => `<div class="sub${i === 0 ? " top" : ""}">
+        <div><b>${esc(s.name)}</b>
+          <span class="need">겹치는 역량 ${s.overlap}개 · 이 세분류 공고 ${s.units}건</span></div>
+        ${s.description ? `<div class="does sm">${esc(s.description)}</div>` : ""}
+      </div>`).join("")}
+      <div class="why" style="margin-top:6px">
+        표본이 작아 순위 자체를 근거로 쓰기는 어렵습니다. 방향만 참고하세요.</div>` : ""}
     ${m.have.length ? `<div class="sec">겹치는 역량</div>
       ${m.have.slice(0,6).map(e => evidence(e, true)).join("")}` : ""}
     ${isTarget && m.lack.length ? `<div class="sec">아직 겹치지 않는 역량</div>

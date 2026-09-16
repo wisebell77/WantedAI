@@ -110,6 +110,14 @@ class Paths:
     def evidence(self) -> Path:             # 근거 인덱스 (공고 원문 + 출처)
         return self.data / "evidence.json"
 
+    @property
+    def descriptions(self) -> Path:         # NCS 분류 설명 (고용24 능력단위 정의)
+        return self.data / "ncs_descriptions.json"
+
+    @property
+    def sub_matrix(self) -> Path:           # 세분류 × 역량 행렬
+        return self.data / "job_matrix_sub.json"
+
     def ensure(self) -> None:
         for p in (self.data, self.alio_detail, self.jd_files, self.jd_text,
                   self.private_static, self.private_browser, self.private_ocr):

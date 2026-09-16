@@ -35,6 +35,10 @@ def main() -> int:
     ap.add_argument("--evidence-out", default=None)
     ap.add_argument("--quotes", type=int, default=3,
                     help="(직무, 역량) 하나당 보관할 공고 원문 표기 수")
+    ap.add_argument("--no-sub", action="store_true",
+                    help="세분류 행렬을 만들지 않는다")
+    ap.add_argument("--sub-min", type=int, default=5,
+                    help="세분류 최소 단위 수. 소분류 안 줄 세우기용이라 문턱이 낮다")
     ap.add_argument("--no-evidence", action="store_true",
                     help="근거 인덱스를 만들지 않는다. 서비스에는 쓰면 안 된다")
     ap.add_argument("--plan", action="store_true",
@@ -68,6 +72,13 @@ def main() -> int:
     print(f"  총 {len(matrix)}개 직무")
     print()
     print(f"저장: {args.out or PATHS.job_matrix}")
+
+    # 세분류 행렬 — 소분류 안에서 줄 세우는 용도. 추천 후보가 아니다.
+    if not args.no_sub:
+        sub = JobMatrix.build(units, dic, tax, level=8, min_units=args.sub_min)
+        sub.save(PATHS.sub_matrix)
+        print()
+        print(f"세분류 행렬 {len(sub)}개 (단위 {args.sub_min}개 이상) → {PATHS.sub_matrix}")
 
     if not args.no_evidence:
         print()

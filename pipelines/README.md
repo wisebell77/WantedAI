@@ -43,6 +43,7 @@ python pipelines/evaluate.py
 | `build_dictionary.py` | 임베딩이 오래 걸린다. 임계만 바꿀 땐 캐시를 써서 즉시 끝난다 |
 | `build_matrix.py` | 행렬과 근거 인덱스를 **같이** 만든다. `--plan` 은 수집 계획도 |
 | `evaluate.py` | 숫자에 **기준일**을 같이 적는다. 갱신하면 달라진다 |
+| `fetch_descriptions.py` | NCS 분류에 공식 설명을 붙인다. 분류 체계는 자주 안 바뀌니 한 번만 |
 | `recommend_demo.py` | 프리셋 3종이 여기 있다. 랜딩에 그대로 쓴다 |
 
 화면으로 보려면 `python web/server.py` (설치 불필요, `web/README.md` 참고).

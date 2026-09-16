@@ -2,8 +2,8 @@
 
 from .evidence import EvidenceIndex, MarketSignal, Quote, RelatedPosting, Source
 from .matrix import JobMatrix, JobProfile
-from .scorer import Evidence, GapReport, JobMatch, Recommender
+from .scorer import Evidence, GapReport, JobMatch, Recommender, Subdivision
 
 __all__ = ["JobMatrix", "JobProfile", "Recommender", "JobMatch",
            "GapReport", "Evidence", "EvidenceIndex", "Quote", "Source",
-           "MarketSignal", "RelatedPosting"]
+           "MarketSignal", "RelatedPosting", "Subdivision"]

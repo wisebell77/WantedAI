@@ -103,6 +103,8 @@ evaluate.py        →  커버리지 / 내부 평가 / 교차 평가
 | `job_matrix.json` | 1.0 MB | 직무 41개 × 역량 11,113개 (요구 건수 + IDF) |
 | `evidence.json` | 2.0 MB | 공고 원문 표기 · 대표 공고 · 출처 문서 1,179건 (gzip 0.4MB) |
 | 노드 벡터 | 3.4 MB | 2,343개 × 768차원 float16 |
+| `job_matrix_sub.json` | 0.9 MB | 세분류 192개 — 소분류 안에서 줄 세우기용 |
+| `ncs_descriptions.json` | 0.1 MB | 분류 93개의 능력단위 목록 (고용24) |
 | 사전·분류표 | 2.0 MB | L2 군집, 확장 노드, NCS 분류표 |
 
 `evidence.json` 은 직무 단위로 쪼개면 gzip 49KB 라 사용자가 펼칠 때만 불러오면 된다.

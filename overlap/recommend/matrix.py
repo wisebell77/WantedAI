@@ -74,10 +74,15 @@ class JobMatrix:
 
     @classmethod
     def build(cls, units, dictionary=None, taxonomy=None,
-              settings=SETTINGS) -> "JobMatrix":
+              settings=SETTINGS, level: int = 6,
+              min_units: int | None = None) -> "JobMatrix":
         """JobUnit 목록 → 행렬.
 
         dictionary 를 주면 역량을 L2 군집 대표로 접는다.
+
+        level 6 이 기본(소분류)이고 8 이면 세분류다. 세분류 행렬은 추천 후보가
+        아니라 **소분류 안에서 어느 쪽에 더 가까운지 줄 세우는 용도**다.
+        표본이 적어 단독 추천에는 못 쓴다 — 그래서 min_units 로 문턱을 따로 준다.
         """
         from ..competency.normalize import L1Normalizer, is_noise
         norm = L1Normalizer()
@@ -86,8 +91,8 @@ class JobMatrix:
         by: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
         inst: dict[str, Counter] = defaultdict(Counter)
         for u in units:
-            code = (u.ncs_code or "")[:6]
-            if len(code) != 6:
+            code = (u.ncs_code or "")[:level]
+            if len(code) != level:
                 continue
             s = {fold(norm(x)) for k in settings.sections
                  for x in u.sections.get(k, [])}
@@ -97,10 +102,16 @@ class JobMatrix:
             by[code].append((u.institution or "?", s))
             inst[code][u.institution or "?"] += 1
 
-        keep = {c for c in by
-                if cls.effective_units(inst[c], settings.institution_cap)
-                >= settings.min_effective_units
-                and cls.hhi(inst[c]) < settings.max_hhi}
+        if min_units is None:
+            keep = {c for c in by
+                    if cls.effective_units(inst[c], settings.institution_cap)
+                    >= settings.min_effective_units
+                    and cls.hhi(inst[c]) < settings.max_hhi}
+        else:
+            # 세분류는 소분류 안의 줄 세우기용이라 문턱을 단위 수로만 본다.
+            # 여기에 유효단위·HHI 를 걸면 정보기술개발 안의 `빅데이터분석` 처럼
+            # 정작 보여 주고 싶은 것이 통째로 사라진다.
+            keep = {c for c in by if len(by[c]) >= min_units}
 
         # 표본 크기를 맞춘다. 큰 직무가 어휘 폭만으로 이기는 것을 막는다.
         used = {c: cls.level_units(by[c], settings.profile_unit_cap) for c in keep}

@@ -3,9 +3,11 @@
 from .alio import AlioClient, CollectResult, JobDoc, NCS_MAJOR, PublicCollector
 from .attachments import Attachment, AttachmentFetcher
 from .base import Budget, HttpClient, QuotaExceeded, SourceDown
+from .jobinfo import Description, DescriptionStore, JobInfoClient
 from .private import GongchaeClient, GongchaeDiff, PrivateCorpus
 
 __all__ = ["AlioClient", "PublicCollector", "JobDoc", "CollectResult", "NCS_MAJOR",
            "AttachmentFetcher", "Attachment",
            "Budget", "HttpClient", "QuotaExceeded", "SourceDown",
-           "GongchaeClient", "GongchaeDiff", "PrivateCorpus"]
+           "GongchaeClient", "GongchaeDiff", "PrivateCorpus",
+           "JobInfoClient", "Description", "DescriptionStore"]
