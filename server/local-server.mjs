@@ -4,7 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { evaluateInterviewWithUpstage, runCareerCoachAgent } from "./upstage-career-coach.js";
+import { runCareerCoachAgent } from "./upstage-career-coach.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dist = join(root, "dist");
@@ -21,6 +21,7 @@ try {
 const roles = JSON.parse(await readFile(join(dataDir, "roles.json"), "utf8"));
 const postings = JSON.parse(await readFile(join(dataDir, "jd_tiered.json"), "utf8"));
 const postingByUrl = new Map(postings.map((item) => [item.url, item]));
+const personaRoleIndexes = new Map();
 function roleExcerpt(text = "", roleName = "") {
   const index = roleName ? text.indexOf(roleName) : -1;
   const start = index >= 0 ? Math.max(0, index - 120) : 0;
@@ -40,6 +41,8 @@ function extractDeadline(text = "") {
 }
 const contexts = roles.map((role, index) => {
   const posting = postingByUrl.get(role.url) || {};
+  const personaRoleIndex = personaRoleIndexes.get(role.url) || 0;
+  personaRoleIndexes.set(role.url, personaRoleIndex + 1);
   return {
     postingId: `role-${index + 1}`,
     companyName: role.corp,
@@ -51,6 +54,7 @@ const contexts = roles.map((role, index) => {
     requiredSkills: role.techs || [],
     preferredSkills: [],
     sourceUrl: role.url,
+    personaRoleIndex,
     deadline: extractDeadline(posting.clean),
     sourceType: role.src,
     sourceUpdatedAt: "2026-09-11"
@@ -101,7 +105,29 @@ async function transcribeWithFasterWhisper(audio, prompt = "") {
     await rm(workDir, { recursive: true, force: true });
   }
 }
+async function runPersonaBridge(input) {
+  const python = process.env.PYTHON_BIN || join(root, ".venv", "bin", "python");
+  return new Promise((resolve, reject) => {
+    const child = spawn(python, [join(root, "server", "persona_bridge.py")], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, OVERLAP_DATA_DIR: dataDir }
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (stderr.trim()) console.error("Persona bridge:", stderr.trim());
+      if (code !== 0) return reject(new Error(stderr || "PERSONA_BRIDGE_FAILED"));
+      try { resolve(JSON.parse(stdout)); }
+      catch { reject(new Error("PERSONA_BRIDGE_INVALID_JSON")); }
+    });
+    child.stdin.end(JSON.stringify(input));
+  });
+}
 const validModes = new Set(["timeline", "task_prioritization", "jd_tagging", "cover_letter_guide", "consultation", "interview_feedback"]);
+const interviewPersonas = new Map();
 function fallbackActions(input) {
   const skills = input.jobContext.requiredSkills.slice(0, 3).join(", ") || "공고의 필수 조건";
   if (input.mode === "task_prioritization") return [
@@ -148,26 +174,6 @@ function normalizeAgentResult(result, input) {
     modelUsed: result.modelUsed
   };
 }
-function normalizeInterviewResult(result) {
-  if (!Array.isArray(result?.feedback) || !result.feedback.length) {
-    const error = new Error("INTERVIEW_RESPONSE_INVALID");
-    error.code = "INTERVIEW_RESPONSE_INVALID";
-    throw error;
-  }
-  return {
-    feedback: result.feedback.slice(0, 4).map((item) => ({
-      label: String(item.label || "면접 답변"),
-      title: String(item.title || "답변 확인"),
-      body: String(item.body || "답변의 근거를 한 문장 더 구체적으로 설명해 보세요."),
-      type: item.type === "good" ? "good" : "improve"
-    })),
-    followupQuestion: typeof result.followupQuestion === "string" ? result.followupQuestion : "이 답변에서 본인이 직접 내린 판단과 그 근거를 구체적으로 설명해 주세요.",
-    evidence: Array.isArray(result.evidence) ? result.evidence.filter((item) => item?.source && item?.quote).map((item) => ({ source: String(item.source), quote: String(item.quote) })) : [],
-    missingInformation: Array.isArray(result.missingInformation) ? result.missingInformation.map(String) : [],
-    modelUsed: result.modelUsed
-  };
-}
-
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
@@ -186,6 +192,29 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname.startsWith("/api/v1/job-contexts/")) {
       const item = contexts.find((row) => row.postingId === decodeURIComponent(url.pathname.split("/").pop()));
       return item ? sendJson(res, 200, item) : sendJson(res, 404, { error: "JOB_CONTEXT_NOT_FOUND" });
+    }
+    if (req.method === "GET" && url.pathname === "/api/v1/agent/interview-persona") {
+      const postingId = url.searchParams.get("postingId");
+      const job = contexts.find((row) => row.postingId === postingId);
+      if (!job) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
+      try {
+        let persona = interviewPersonas.get(postingId);
+        if (!persona) {
+          persona = await runPersonaBridge({ action: "persona", posting: job });
+          interviewPersonas.set(postingId, persona);
+        }
+        if (!persona.rubric.items.length || !persona.questions.length) return sendJson(res, 422, { error: "JOB_RUBRIC_UNAVAILABLE" });
+        return sendJson(res, 200, {
+          persona: persona.rubric.persona,
+          rubricId: persona.rubric.rubric_id,
+          generatedBy: persona.rubric.generated_by,
+          items: persona.rubric.items.map(({ id, label, jd_quote, kind, keywords, followup }) => ({ id, label, jdQuote: jd_quote, kind, keywords, followup })),
+          questions: persona.questions
+        });
+      } catch (error) {
+        console.error("Interview persona error:", error.message);
+        return sendJson(res, 502, { error: "INTERVIEW_PERSONA_UNAVAILABLE" });
+      }
     }
     if (req.method === "POST" && url.pathname === "/api/v1/agent/chat") {
       if (!process.env.UPSTAGE_API_KEY) return sendJson(res, 503, { error: "UPSTAGE_API_KEY_MISSING" });
@@ -208,20 +237,40 @@ const server = createServer(async (req, res) => {
       }
     }
     if (req.method === "POST" && url.pathname === "/api/v1/agent/interview-feedback") {
-      if (!process.env.UPSTAGE_API_KEY) return sendJson(res, 503, { error: "UPSTAGE_API_KEY_MISSING" });
       const input = await readJson(req);
       const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
       if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
       if (!input.question?.trim()) return sendJson(res, 422, { error: "QUESTION_REQUIRED" });
       if (!input.transcript?.trim()) return sendJson(res, 422, { error: "TRANSCRIPT_REQUIRED" });
       try {
-        const result = await evaluateInterviewWithUpstage({ ...input, jobContext: canonicalJob }, {
-          apiKey: process.env.UPSTAGE_API_KEY,
-          coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
+        let persona = interviewPersonas.get(input.postingId);
+        if (!persona) {
+          persona = await runPersonaBridge({ action: "persona", posting: canonicalJob });
+          interviewPersonas.set(input.postingId, persona);
+        }
+        if (!persona.rubric.items.length || !persona.questions.length) return sendJson(res, 422, { error: "JOB_RUBRIC_UNAVAILABLE" });
+        const itemId = input.itemId || persona.questions[0]?.item_id;
+        if (!persona.rubric.items.some((item) => item.id === itemId)) return sendJson(res, 422, { error: "VALID_RUBRIC_ITEM_REQUIRED" });
+        const result = await runPersonaBridge({
+          action: "evaluate",
+          rubric: persona.rubric,
+          itemId,
+          answer: input.transcript,
+          followupAnswer: input.followupAnswer || ""
         });
-        return sendJson(res, 200, normalizeInterviewResult(result));
+        return sendJson(res, 200, {
+          feedback: [{ label: result.label, title: `${result.label} · ${result.score}/3`, body: result.feedback, type: result.score >= 2 ? "good" : "improve" }],
+          followupQuestion: result.followupQuestion,
+          evidence: [
+            { source: "JD", quote: result.jdQuote },
+            ...(result.answerEvidence ? [{ source: "답변", quote: result.answerEvidence }] : [])
+          ],
+          score: result.score,
+          note: result.note,
+          modelUsed: result.modelUsed
+        });
       } catch (error) {
-        console.error("Interview agent upstream error:", error.message);
+        console.error("Interview persona evaluation error:", error.message);
         return sendJson(res, 502, { error: "INTERVIEW_AGENT_UPSTREAM_ERROR" });
       }
     }

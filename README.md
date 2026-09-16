@@ -6,7 +6,8 @@
 
 - 선택 공고를 근거로 준비 타임라인, 이번 주 할 일, 자소서 시작 순서를 제안합니다.
 - 공고별로 경험, 마감일, 대화, 할 일을 따로 저장합니다.
-- 녹화 면접, 공고 JD 용어를 힌트로 쓰는 로컬 서버 faster-whisper medium 전사(beam size 5), 규칙 기반 전달 지표 확인을 제공합니다.
+- 녹화 면접, 공고 JD 용어를 힌트로 쓰는 faster-whisper medium 전사(beam size 5), MediaPipe 영상 지표를 제공합니다.
+- 선택 공고에서 만든 직무 루브릭으로 답변을 평가하고, 약한 항목에는 한 번 꼬리질문합니다.
 
 ## 실행
 
@@ -25,6 +26,8 @@ npm run dev
 - [현재 MVP 정리](docs/CURRENT_MVP_HANDOFF.md)
 - [크롤링 팀 참고 가이드](docs/CRAWLER_TEAM_GUIDE.md)
 - [화상면접 MVP 범위](docs/MVP_SCOPE.md)
+- [직무 페르소나 구현 안내](persona/README.md)
+- [팀 공유용 MVP 요약](docs/TEAM_MVP_SUMMARY.md)
 
 ## 환경 변수
 

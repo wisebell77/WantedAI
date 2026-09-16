@@ -1,6 +1,14 @@
 (() => {
   const apiBaseUrl = window.OVERLAP_AGENT_API_BASE_URL || "";
 
+  async function getInterviewPersona(postingId) {
+    const response = await fetch(`${apiBaseUrl}/api/v1/agent/interview-persona?postingId=${encodeURIComponent(postingId)}`, {
+      headers: { Accept: "application/json" }
+    });
+    if (!response.ok) throw new Error(`Interview persona request failed: ${response.status}`);
+    return response.json();
+  }
+
   async function evaluateInterview(input) {
     const response = await fetch(`${apiBaseUrl}/api/v1/agent/interview-feedback`, {
       method: "POST",
@@ -13,5 +21,5 @@
     return result;
   }
 
-  window.CareerCoachAPI = { evaluateInterview };
+  window.CareerCoachAPI = { evaluateInterview, getInterviewPersona };
 })();

@@ -47,7 +47,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
   transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, transcribing: false,
-  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null,
+  audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null, interviewPersona: null,
   preparing: false, preparationTimer: null, preparationEndsAt: 0, questionRevealed: false,
   vision: null, visionStatus: "대기", visionSampleId: null, visionLastAt: 0, visual: null, overlayVisible: false, overlayFrame: null, overlayLastTime: -1
 };
@@ -64,15 +64,28 @@ async function loadJobContext() {
   } catch (error) {
     $("job-context-status").textContent = "채용공고 정보를 불러오지 못해 데모 직무 루브릭을 사용합니다.";
     console.error(error);
+    return;
+  }
+  try {
+    const persona = await window.CareerCoachAPI.getInterviewPersona(postingId);
+    if (persona.items.length && persona.questions.length) state.interviewPersona = persona;
+    else $("job-context-status").textContent += " · 공고 루브릭이 부족해 기본 연습 기준을 사용합니다.";
+    updateRole();
+  } catch (error) {
+    $("job-context-status").textContent += " · 직무 루브릭을 불러오지 못해 기본 연습 기준을 사용합니다.";
+    console.error(error);
   }
 }
 
 function updateRole() {
   const data = roleData[$("role-select").value];
-  $("signal-title").textContent = data.signal;
-  $("question-text").textContent = state.questionRevealed ? data.questions[state.question] : "면접 시작을 누르면 질문이 공개됩니다.";
+  const items = state.interviewPersona?.items || data.rubric;
+  const questions = state.interviewPersona?.questions.length ? state.interviewPersona.questions : data.questions.map((question) => ({ question, item_id: null }));
+  const currentQuestion = questions[state.question % questions.length];
+  $("signal-title").textContent = state.interviewPersona?.persona?.name || data.signal;
+  $("question-text").textContent = state.questionRevealed ? currentQuestion.question : "면접 시작을 누르면 질문이 공개됩니다.";
   $("question-number").textContent = state.question + 1;
-  $("rubric-list").innerHTML = data.rubric.map((item, i) => `<li><span>0${i + 1}</span>${item.label}</li>`).join("");
+  $("rubric-list").innerHTML = items.map((item, i) => `<li><span>0${i + 1}</span>${item.label}</li>`).join("");
 }
 
 async function enableCamera() {
@@ -455,8 +468,13 @@ function analyze() {
   const fillerPattern = /(음|어|그니까|그러니까|약간|뭔가|사실은|아무튼)/g;
   const fillers = text.match(fillerPattern) || [];
   const data = roleData[$("role-select").value];
-  const keywordHits = data.keywords.filter((word) => text.includes(word));
-  const rubricResults = data.rubric.map((item) => evaluateRubric(item, text));
+  const rubric = state.interviewPersona?.items.map((item) => ({
+    ...item,
+    checks: (item.keywords || []).map((word) => new RegExp(escapeRegex(word), "i"))
+  })) || data.rubric;
+  const keywords = state.interviewPersona?.items.flatMap((item) => item.keywords || []) || data.keywords;
+  const keywordHits = [...new Set(keywords)].filter((word) => new RegExp(escapeRegex(word), "i").test(text));
+  const rubricResults = rubric.map((item) => evaluateRubric(item, text));
   const rubricTotal = rubricResults.reduce((total, item) => total + item.score, 0);
   const hasNumber = /\d|퍼센트|배|명|건/.test(text);
   const volumeValues = state.audioSamples.filter((v) => v >= 0.018);
@@ -465,7 +483,8 @@ function analyze() {
   const voiceVariation = Math.sqrt(volumeVariance);
   const textAvailable = compact.length > 0;
   const paceHealthy = pace >= 250 && pace <= 420;
-  const score = textAvailable ? Math.min(95, Math.max(15, Math.round(18 + (rubricTotal / 9) * 70 + (paceHealthy ? 5 : 0) - Math.min(8, fillers.length * 2)))) : 0;
+  const rubricMax = Math.max(3, rubricResults.length * 3);
+  const score = textAvailable ? Math.min(95, Math.max(15, Math.round(18 + (rubricTotal / rubricMax) * 70 + (paceHealthy ? 5 : 0) - Math.min(8, fillers.length * 2)))) : 0;
 
   $("total-score").textContent = `${score}`;
   $("score-fill").style.width = `${score}%`;
@@ -491,7 +510,7 @@ function analyze() {
     improvements.push([item.label, item.missing]);
   });
   if (!hasNumber && !improvements.some(([title]) => title === "결과·회고")) improvements.push(["근거", "결과에 기간, 규모, 전후 변화 중 하나를 덧붙이면 판단 근거가 선명해집니다."]);
-  if (!keywordHits.length) improvements.push(["직무 연결", `이번 질문의 핵심인 ${data.signal} 중 하나를 실제 행동과 연결해 보세요.`]);
+  if (!keywordHits.length) improvements.push(["직무 연결", `이번 질문의 핵심인 ${state.interviewPersona?.persona?.focus?.join(" · ") || data.signal} 중 하나를 실제 행동과 연결해 보세요.`]);
   if (fillers.length >= 3) improvements.push(["전달 습관", `습관어가 ${fillers.length}회 감지됐습니다. 문장 사이에 짧게 멈추는 편이 더 또렷합니다.`]);
   if (state.silenceRuns.length >= 2) improvements.push(["침묵", `1.5초 이상의 침묵이 ${state.silenceRuns.length}회 있었습니다. 첫 문장을 미리 정해 두면 시작이 안정됩니다.`]);
   if (!improvements.length) improvements.push(["다음 단계", "현재 구조는 안정적입니다. 본인의 판단 기준과 대안 비교를 한 문장 추가해 깊이를 높여 보세요."]);
@@ -518,13 +537,17 @@ function renderVideoFeedback() {
 
 function evaluateRubric(item, text) {
   const evidence = item.checks.map((pattern) => findEvidence(text, pattern)).filter(Boolean);
-  const score = evidence.length;
+  const score = Math.min(3, evidence.length);
   const missing = score === 0
     ? `현재 답변에서 ${item.label}의 근거를 찾지 못했습니다. ${item.followup}`
     : score === 1
       ? `${item.label}에 대한 단서가 하나 있습니다. 행동 또는 결과를 더해 근거를 완성해 보세요.`
       : `${item.label}의 근거가 더 선명해지도록 판단 이유나 회고를 한 문장 덧붙여 보세요.`;
   return { ...item, score, evidence, missing };
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function findEvidence(text, pattern) {
@@ -567,15 +590,20 @@ async function requestAgentFeedback() {
   button.disabled = true;
   $("agent-feedback-status").textContent = "직무 AI 코치가 선택 공고와 답변 근거를 확인하고 있습니다.";
   try {
+    const questions = state.interviewPersona?.questions || [];
+    const currentQuestion = questions[state.question % Math.max(1, questions.length)];
     const result = await window.CareerCoachAPI.evaluateInterview({
       postingId: state.jobContext?.postingId || null,
       question: $("question-text").textContent,
+      itemId: currentQuestion?.item_id,
       transcript,
+      followupAnswer: state.followupText,
       deliveryMetrics: { durationSeconds: state.duration, longPauses: state.silenceRuns.length }
     });
-    $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, item.body, item.type)).join("");
-    if (result.followupQuestion) $("followup-context").textContent = result.followupQuestion;
-    $("agent-feedback-status").textContent = "직무 AI 코치 피드백이 반영됐습니다.";
+    const evidence = result.evidence?.map((item) => `${item.source}: “${item.quote}”`).join(" · ");
+    $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, `${item.body}${evidence ? ` 근거: ${evidence}` : ""}`, item.type)).join("");
+    $("followup-context").textContent = result.followupQuestion || "이 기준에 대한 추가 질문은 없습니다.";
+    $("agent-feedback-status").textContent = `직무 AI 코치 피드백이 반영됐습니다. (${result.modelUsed})`;
   } catch (error) {
     $("agent-feedback-status").textContent = "AI 코치 피드백을 불러오지 못해 규칙 기반 피드백을 유지합니다.";
     console.error(error);
@@ -637,7 +665,7 @@ function resetPractice() {
 }
 
 $("role-select").addEventListener("change", () => { state.question = 0; state.followupText = ""; updateRole(); });
-$("next-question").addEventListener("click", () => { state.question = (state.question + 1) % 3; updateRole(); });
+$("next-question").addEventListener("click", () => { const count = state.interviewPersona?.questions.length || 3; state.question = (state.question + 1) % count; state.followupText = ""; updateRole(); });
 $("enable-camera").addEventListener("click", enableCamera);
 $("start-interview-button").addEventListener("click", beginInterview);
 $("overlay-toggle").addEventListener("click", toggleOverlay);
@@ -663,6 +691,7 @@ $("submit-followup").addEventListener("click", () => {
   }
   state.followupText = answer;
   analyze();
+  requestAgentFeedback();
 });
 updateRole();
 loadJobContext();
