@@ -16,6 +16,15 @@ _ACTION = re.compile(r"(제가|저는|직접|담당|주도|구현|개발|설계|
 _RESULT = re.compile(r"(\d|결과|성과|개선|단축|증가|감소|달성|수상|배포)")
 
 
+def _action(status: str, user_quote: str, llm_action: str = "") -> str:
+    """판정과 할 일이 모순되지 않게 코드로 정한다(LLM이 'missing인데 keep'을 낸 사례 대응)."""
+    if status == "strong":
+        return "keep"
+    if status == "missing":
+        return "insert" if user_quote else "prepare"
+    return "prepare" if (llm_action == "prepare" and not user_quote) else "revise"
+
+
 def _heuristic(rubric: dict, letter: str, experiences: list[str]) -> list[dict]:
     out = []
     for it in rubric["items"]:
@@ -30,11 +39,13 @@ def _heuristic(rubric: dict, letter: str, experiences: list[str]) -> list[dict]:
         if status != "strong":
             user_quote = next((e for e in experiences
                                if find_sentence(e, it["keywords"])), "")
-        action = "keep" if status == "strong" else ("insert" if user_quote else "prepare")
+        action = _action(status, user_quote)
         if action == "insert":
             fb += " 입력한 경험 중 관련 내용이 있으니 자소서에 옮겨 보세요."
         elif action == "prepare":
             fb += " 입력한 경험에도 근거가 없어 '준비 필요' 항목으로 둡니다."
+        elif user_quote:
+            fb += " 입력한 경험 중 보강에 쓸 내용이 있습니다."
         out.append({"status": status, "letter_quote": sent, "user_quote": user_quote,
                     "feedback": fb, "suggestion": "", "action": action})
     return out
@@ -43,8 +54,11 @@ def _heuristic(rubric: dict, letter: str, experiences: list[str]) -> list[dict]:
 _SYSTEM = (
     "너는 {persona} 이다. 채점표 항목별로 자소서를 심사한다. "
     "letter_quote 는 자소서에서, user_quote 는 경험 목록에서 글자 그대로 복사한다(없으면 빈 문자열). "
-    "자소서·경험에 없는 사실을 만들어 suggestion 에 넣지 않는다. 근거 경험이 없으면 action=prepare. "
-    "status 기준: strong=본인 행동과 결과가 구체적, weak=언급만 있음, missing=근거 없음. "
+    "status 는 자소서만 보고 판정한다. 경험 목록에만 있고 자소서에 없으면 missing 이다. "
+    "status 기준: strong=본인 행동과 결과가 구체적, weak=언급만 있음, missing=자소서에 근거 없음. "
+    "지원자는 신입이다. 수업·과제·학회·동아리·공모전 경험도 실무와 같은 근거로 인정하고, 실무가 아니라는 이유로 낮추지 않는다. "
+    "자소서·경험에 없는 기술·수치를 사실처럼 쓰지 않는다. 필요하면 '(해당 경험이 있다면)'처럼 조건을 단다. "
+    "feedback 은 80자 이내, suggestion 은 100자 이내. "
     "형식: {{\"items\":[{{\"id\":\"r1\",\"status\":\"strong|weak|missing\",\"letter_quote\":\"\","
     "\"user_quote\":\"\",\"feedback\":\"심사자 관점 1~2문장\",\"suggestion\":\"고쳐 쓸 방향 또는 예시 문장\","
     "\"action\":\"keep|revise|insert|prepare\"}}]}}"
@@ -68,10 +82,10 @@ def _llm(rubric: dict, letter: str, experiences: list[str]) -> list[dict] | None
             lq, status = "", "missing"
         if uq and not verify_quote(uq, exp_text):
             uq = ""
-        action = r.get("action", "prepare")
-        if action == "insert" and not uq:
-            action = "prepare"
-        out.append({"status": status if status in STATUS_SCORE else "missing",
+        if status not in STATUS_SCORE or (status != "missing" and not lq):
+            status = "missing"  # 자소서 인용 없이 충분/약함 판정 불가
+        action = _action(status, uq, r.get("action", ""))
+        out.append({"status": status,
                      "letter_quote": lq, "user_quote": uq,
                      "feedback": r.get("feedback", ""), "suggestion": r.get("suggestion", ""),
                      "action": action})

@@ -40,6 +40,8 @@ def main():
     args = ap.parse_args()
 
     print(f"LLM 사용: {llm.available()}")
+    if llm.available() and not args.interactive:
+        print("※ AI 모드는 질문이 매번 달라져 미리 적어둔 답변과 어긋날 수 있습니다. --interactive 로 직접 답해 보세요.")
     doc = get_role(args.role)
     rub = build_rubric(doc)
 
