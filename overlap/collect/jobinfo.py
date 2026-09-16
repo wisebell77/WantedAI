@@ -54,7 +54,12 @@ class Description:
 
     @property
     def ok(self) -> bool:
-        return bool(self.definitions)
+        return bool(self.units)
+
+    def pairs(self) -> list[tuple[str, str]]:
+        """(능력단위, 정의). 정의가 빈 것도 이름은 살려 둔다."""
+        return [(u, re.sub(r"\s+", " ", d).strip())
+                for u, d in zip(self.units, self.definitions)]
 
     def summary(self, limit: int = 5) -> str:
         """한 줄 설명 — **능력단위 이름을 나열한다.**
@@ -76,9 +81,9 @@ class Description:
 
     def define(self, unit: str) -> str:
         """능력단위 하나의 공식 정의. 펼쳐 볼 때 쓴다."""
-        for u, d in zip(self.units, self.definitions):
+        for u, d in self.pairs():
             if u == unit:
-                return re.sub(r"\s+", " ", d).strip()
+                return d
         return ""
 
     def to_dict(self) -> dict:
@@ -132,9 +137,13 @@ class JobInfoClient:
                     hits = self._match(self.query(part, limit), code)
                     if hits:
                         break
+        # units 와 definitions 는 **같은 길이로 짝을 맞춰** 담는다.
+        # 정의가 있는 것만 따로 거르면 i 번째 이름과 i 번째 정의가 어긋나,
+        # `빅데이터 분석 모델링` 에 엉뚱한 정의가 붙는다.
+        hits = hits[:10]
         return Description(code, name,
-                           [h["unit"] for h in hits][:8],
-                           [h["def"] for h in hits if h["def"]][:4])
+                           [h["unit"] for h in hits],
+                           [h["def"] for h in hits])
 
     @staticmethod
     def _match(rows: list[dict], code: str) -> list[dict]:

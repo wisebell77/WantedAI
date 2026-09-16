@@ -54,6 +54,15 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
 .does.sm{font-size:12.5px;margin:5px 0 0;border-left-color:var(--line)}
 .sub{padding:9px 0;border-top:1px solid var(--line)}
 .sub.top b{color:var(--good)}
+#tip{position:fixed;z-index:99;max-width:420px;display:none;
+  background:#0b0d12;border:1px solid #39414f;border-radius:8px;
+  padding:11px 13px;font-size:12.5px;line-height:1.55;color:#d7dce4;
+  box-shadow:0 8px 28px rgba(0,0,0,.55)}
+#tip b{color:var(--accent);display:block;margin-bottom:6px;font-size:12px}
+#tip .u{margin:5px 0}
+#tip .u i{color:#e6e8ec;font-style:normal;font-weight:600}
+#tip .u span{color:#9aa3b2;display:block;margin-top:1px}
+.tip{border-bottom:1px dotted var(--dim);cursor:help}
 .note{background:#1a1510;border:1px solid #3a2c18;color:#e8d5b5;
   border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:16px}
 .empty{color:var(--dim);padding:40px 0;text-align:center}
@@ -89,6 +98,7 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
 
   <div id="right"><div class="empty">왼쪽에 경험을 넣고 <b>대조하기</b>를 눌러 보세요.</div></div>
 </main>
+<div id="tip"></div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -142,6 +152,49 @@ $("#run").onclick = async () => {
   } finally { $("#run").disabled = false; }
 };
 
+// 마우스를 올리면 뜨는 작은 창. 능력단위 이름과 공식 정의를 보여 준다.
+// 카드에 다 펼치면 화면이 길어지고, 안 보여 주면 이름만으로는 안 와닿는다.
+const TIPS = new Map();
+let tipId = 0;
+
+function tipFor(title, abilities){
+  if (!abilities?.length) return "";
+  const id = "t" + (++tipId);
+  TIPS.set(id, `<b>${esc(title)} — 능력단위 ${abilities.length}개</b>` +
+    abilities.map(a => `<div class="u"><i>${esc(a.name)}</i>` +
+      (a.def ? `<span>${esc(a.def)}</span>` : "") + `</div>`).join(""));
+  return id;
+}
+
+(function(){
+  const tip = $("#tip");
+  document.addEventListener("mouseover", e => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) return;
+    const html = TIPS.get(el.dataset.tip);
+    if (!html) return;
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    place(e);
+  });
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display === "block" && e.target.closest("[data-tip]")) place(e);
+  });
+  document.addEventListener("mouseout", e => {
+    if (e.target.closest("[data-tip]") &&
+        !e.relatedTarget?.closest("[data-tip]")) tip.style.display = "none";
+  });
+  function place(e){
+    const r = tip.getBoundingClientRect();
+    // 화면 밖으로 나가면 반대쪽에 붙인다
+    const x = Math.min(e.clientX + 14, innerWidth - r.width - 12);
+    const y = e.clientY + r.height + 20 > innerHeight
+      ? Math.max(e.clientY - r.height - 12, 8) : e.clientY + 16;
+    tip.style.left = Math.max(x, 8) + "px";
+    tip.style.top = y + "px";
+  }
+})();
+
 function evidence(e, mine=true){
   const q = e.quotes?.[0];
   return `<div class="comp">
@@ -157,16 +210,23 @@ function evidence(e, mine=true){
   </div>`;
 }
 
+// '외 n개' 에 마우스를 올리면 나머지가 보이게 한다.
+function does(o){
+  const id = tipFor(o.name, o.abilities);
+  return esc(o.description).replace(/외 (\d+)개$/,
+    (_, n) => `<span class="tip" data-tip="${id}">외 ${n}개</span>`);
+}
+
 function matchCard(m, isTarget=false){
   return `<div class="card">
     <h3>${esc(m.name)}</h3>
     <div class="meta">${esc(m.sentence)}</div>
-    ${m.description ? `<div class="does"><b>하는 일</b> ${esc(m.description)}</div>` : ""}
+    ${m.description ? `<div class="does"><b>하는 일</b>${does(m)}</div>` : ""}
     ${m.subdivisions?.length ? `<div class="sec">이 안에서는 어느 쪽인가</div>
       ${m.subdivisions.map((s, i) => `<div class="sub${i === 0 ? " top" : ""}">
-        <div><b>${esc(s.name)}</b>
+        <div><b class="tip" data-tip="${tipFor(s.name, s.abilities)}">${esc(s.name)}</b>
           <span class="need">겹치는 역량 ${s.overlap}개 · 이 세분류 공고 ${s.units}건</span></div>
-        ${s.description ? `<div class="does sm">${esc(s.description)}</div>` : ""}
+        ${s.description ? `<div class="does sm">${does(s)}</div>` : ""}
       </div>`).join("")}
       <div class="why" style="margin-top:6px">
         표본이 작아 순위 자체를 근거로 쓰기는 어렵습니다. 방향만 참고하세요.</div>` : ""}

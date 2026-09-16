@@ -69,17 +69,23 @@ class Engine:
                             "url": q.sources[0].url if q.sources else ""}
                            for q in e.quotes]}
 
-    @classmethod
-    def _match(cls, m) -> dict:
+    def _units(self, code: str) -> list[dict]:
+        """능력단위 (이름, 공식 정의). 화면에서 마우스를 올릴 때 쓴다."""
+        d = self.rec.descriptions.get(code) if self.rec.descriptions else None
+        return [{"name": u, "def": v} for u, v in d.pairs()] if d else []
+
+    def _match(self, m) -> dict:
         return {"code": m.code, "name": m.name, "units": m.units,
                 "institutions": m.institutions, "sentence": m.sentence(),
                 "description": m.description,
+                "abilities": self._units(m.code),
                 "subdivisions": [{"name": s.name, "units": s.units,
                                   "overlap": s.overlap,
-                                  "description": s.description}
+                                  "description": s.description,
+                                  "abilities": self._units(s.code)}
                                  for s in m.subdivisions],
-                "have": [cls._evidence(e) for e in m.have],
-                "lack": [cls._evidence(e) for e in m.lack],
+                "have": [self._evidence(e) for e in m.have],
+                "lack": [self._evidence(e) for e in m.lack],
                 "postings": [{"label": p.source.label(), "url": p.source.url,
                               "competencies": list(p.competencies)}
                              for p in m.postings]}
