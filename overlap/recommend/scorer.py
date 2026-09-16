@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..competency.projector import ProjectionResult, TextProjector
+from ..config import SETTINGS
 from .evidence import EvidenceIndex, MarketSignal, Quote, RelatedPosting
 from .matrix import JobMatrix, JobProfile
 
@@ -54,6 +55,50 @@ class Evidence:
                 if s.institution:
                     return s.label()
         return ""
+
+
+@dataclass(frozen=True)
+class Gap:
+    """채우면 좋은 역량 하나. **조언이 아니라 관찰이다.**
+
+    CLAUDE.md 가 금지한 것이 있다 —
+        "SQL이 부족하니 인강을 들으세요" 같은 일반적 학습 조언은
+        LLM 이 지어내는 것이므로 넣지 않는다.
+
+    그래서 "무엇을 하라"는 말은 한 줄도 없다. 대신 데이터가 아는 사실 셋을 낸다.
+
+        rate      이 직무 공고 중 몇 %가 요구했나   — 얼마나 필수인가
+        breadth   41개 직무 중 몇 개가 요구하나     — 다른 직무에도 통하는가
+        near      내 문장 중 가장 가까운 것과 유사도 — 얼마나 근접했나
+
+    셋 중 near 가 가장 쓸모 있다. 임계를 못 넘어 탈락한 역량이라도
+    0.52 로 스쳤다면 "없다"가 아니라 "거의 닿았다"이고, 문장을 조금 더
+    구체적으로 쓰면 읽힐 수 있다는 뜻이다. 그건 지어낸 조언이 아니라
+    우리 엔진이 실제로 잰 거리다.
+    """
+
+    competency: str
+    postings: int = 0                 # 이 직무 공고 중 요구 건수
+    rate: float = 0.0                 # 요구 비율
+    breadth: int = 0                  # 몇 개 직무가 요구하는가
+    quotes: tuple[Quote, ...] = ()    # 공고 원문
+    near_sentence: str = ""           # 가장 가까운 내 문장
+    near_similarity: float = 0.0
+    kind: str = "core"                # near | core | broad
+
+    def sentence(self) -> str:
+        if self.kind == "near":
+            return (f"{self.competency} — 당신의 문장이 유사도 "
+                    f"{self.near_similarity:.2f} 로 근접했습니다 "
+                    f"(공고 {self.postings}건)")
+        if self.kind == "broad":
+            return (f"{self.competency} — 이 직무 공고 {self.postings}건이 요구하고, "
+                    f"다른 직무 {self.breadth}개도 요구합니다")
+        return (f"{self.competency} — 이 직무 공고의 "
+                f"{self.rate * 100:.0f}%({self.postings}건)가 요구합니다")
+
+    def __repr__(self) -> str:
+        return f"<Gap {self.competency} {self.kind}>"
 
 
 @dataclass(frozen=True)
@@ -90,6 +135,7 @@ class JobMatch:
     lack: list[Evidence] = field(default_factory=list)   # 요구되는데 없는 역량
     postings: list[RelatedPosting] = field(default_factory=list)  # 대표 공고
     subdivisions: list[Subdivision] = field(default_factory=list)  # 세분류 순위
+    gaps: list[Gap] = field(default_factory=list)        # 채우면 좋은 역량
     description: str = ""                                # 이 분류가 무슨 일인가
     score: float = 0.0                                   # 정렬용. 화면에 쓰지 않는다
 
@@ -217,6 +263,74 @@ class Recommender:
             description=self.describe(profile.code),
             score=profile.score(nodes))
 
+    # ── 채우면 좋은 역량
+
+    def gaps(self, result: ProjectionResult, profile: JobProfile,
+             limit: int = 6, pool: int = 40, quotes: int = 1) -> list[Gap]:
+        """부족한 역량 중 **왜 채울 만한지 말할 수 있는 것**만 골라 낸다.
+
+        세 갈래로 나눈다. 셋 다 데이터가 아는 사실이고, "무엇을 하라"는 말은 없다.
+
+            near   내 문장이 임계 바로 아래로 스친 것.
+                   "없다"가 아니라 "거의 닿았다" — 가장 쓸모 있는 신호다
+            core   이 직무 공고의 절반 이상이 요구하는 것. 빠지면 티가 난다
+            broad  다른 직무도 많이 요구하는 것. 한 직무에만 쓰이지 않는다
+
+        정렬만 바꾸는 게 아니라 **분류가 다르면 사용자가 할 판단도 다르다.**
+        near 는 문장을 고쳐 쓰는 일이고, core 는 실제로 배워야 하는 일이며,
+        broad 는 어디에 투자할지의 문제다. 그래서 섞지 않고 갈라 낸다.
+        """
+        nodes = result.nodes
+        cand = [c for c in profile.missing(nodes)[:pool]
+                if not self.require_quotes
+                or self.evidence.quotes(profile.code, c, 1)]
+        if not cand:
+            return []
+
+        sents = [h.evidence for h in result.hits] + [s for s, _ in result.unmatched]
+        prox = self.projector.proximity(sents, cand) if sents else {}
+        breadth = self.breadth()
+        units = max(profile.units, 1)
+
+        out = []
+        for c in cand:
+            sim, sent = prox.get(c, (0.0, ""))
+            rate = profile.df.get(c, 0) / units
+            # near 의 기준은 **min_best** 다. 그 값을 넘었다는 건
+            # "이 역량 하나만으로도 문장이 읽혔을 거리"라는 뜻이다.
+            # 그런데도 lack 에 있다는 건 다른 역량에 밀렸거나(top_k)
+            # 문장 전체가 임계에 걸렸다는 뜻이라, 진짜로 '거의 닿은' 것이다.
+            #
+            # min_similarity(0.40) 로 잡으면 안 된다. 그러면 0.40~0.42 짜리까지
+            # 전부 near 가 되어 여섯 개가 다 near 로 몰린다 — 실제로 그랬다.
+            if sim >= SETTINGS.min_best:
+                kind = "near"
+            elif rate >= 0.4:
+                kind = "core"
+            elif breadth.get(c, 0) >= len(self.matrix) * 0.25:
+                kind = "broad"
+            else:
+                continue
+            out.append(Gap(c, profile.df.get(c, 0), rate, breadth.get(c, 0),
+                           tuple(self.evidence.quotes(profile.code, c, quotes)),
+                           sent, sim, kind))
+
+        rank = {"near": 0, "core": 1, "broad": 2}
+        out.sort(key=lambda g: (rank[g.kind],
+                                -g.near_similarity if g.kind == "near" else -g.rate))
+        return out[:limit]
+
+    def breadth(self) -> dict[str, int]:
+        """역량마다 '몇 개 직무가 요구하는가'. 한 번 세고 재사용한다."""
+        if getattr(self, "_breadth", None) is None:
+            from collections import Counter
+            c: Counter = Counter()
+            for p in self.matrix:
+                for name in p.weights:
+                    c[name] += 1
+            self._breadth = dict(c)
+        return self._breadth
+
     # ── 한 단계 더 좁히기
 
     def subdivisions(self, nodes, code: str, limit: int = 3,
@@ -278,6 +392,7 @@ class Recommender:
         code, matrix = self.resolve(target)
         res = self.profile(texts)
         tgt = self.compare(res, matrix[code], lack_limit)
+        tgt.gaps = self.gaps(res, matrix[code])
         near = [m for m in self.reverse_from(res, limit=neighbors + 1)
                 if m.code != code[:6]][:neighbors]
         return GapReport(tgt, near, [s for s, _ in res.unmatched],

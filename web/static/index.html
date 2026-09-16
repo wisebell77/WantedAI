@@ -53,6 +53,13 @@ button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line
 .does b{color:var(--accent);font-weight:600;margin-right:6px}
 .does.sm{font-size:12.5px;margin:5px 0 0;border-left-color:var(--line)}
 .sub{padding:9px 0;border-top:1px solid var(--line)}
+.gap{padding:10px 0;border-top:1px solid var(--line)}
+.gap .k{display:inline-block;border-radius:4px;padding:2px 7px;margin-right:8px;
+  font-size:11px;font-weight:600;vertical-align:1px}
+.k.near{background:#1c3326;color:var(--good)}
+.k.core{background:#33291a;color:var(--warm)}
+.k.broad{background:#1e2738;color:var(--accent)}
+.gap .why{margin-top:4px}
 .sub.top b{color:var(--good)}
 /* 모드 토글 — 정방향/역방향은 성격이 달라서 한 목록에 섞으면 안 된다 */
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -305,7 +312,19 @@ function matchCard(m, isTarget=false){
         표본이 작아 순위 자체를 근거로 쓰기는 어렵습니다. 방향만 참고하세요.</div>` : ""}
     ${m.have.length ? `<div class="sec">겹치는 역량</div>
       ${m.have.slice(0,6).map(e => evidence(e, true)).join("")}` : ""}
-    ${isTarget && m.lack.length ? `<div class="sec">아직 겹치지 않는 역량</div>
+    ${isTarget && m.gaps?.length ? `<div class="sec">채우면 좋은 역량</div>
+      <div class="meta" style="margin-bottom:6px">
+        무엇을 하라고 조언하지 않습니다. 공고 데이터가 아는 사실만 보여 줍니다.</div>
+      ${m.gaps.map(g => `<div class="gap">
+        <span class="k ${g.kind}">${{near:"거의 닿음",core:"이 직무 필수",
+          broad:"여러 직무 공통"}[g.kind]}</span><b>${esc(g.competency)}</b>
+        <div class="why">${esc(g.sentence.replace(g.competency + " — ", ""))}</div>
+        ${g.kind === "near" && g.near ? `<div class="ev mine"><span class="tag">당신의 문장</span>
+          <span class="txt">${esc(g.near)}</span></div>` : ""}
+        ${g.quote ? `<div class="ev job"><span class="tag">공고 원문</span>
+          <span class="txt">${esc(g.quote)}</span></div>` : ""}
+      </div>`).join("")}` : ""}
+    ${isTarget && m.lack.length ? `<div class="sec">그 밖에 겹치지 않는 역량</div>
       ${m.lack.slice(0,5).map(e => evidence(e, false)).join("")}` : ""}
     ${m.postings.length ? `<div class="sec">이 직무를 이렇게 정의한 공고</div>
       ${m.postings.map(p => `<div class="post">

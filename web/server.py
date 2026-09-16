@@ -87,6 +87,15 @@ class Engine:
                                   "description": s.description,
                                   "abilities": self._units(s.code)}
                                  for s in m.subdivisions],
+                "gaps": [{"competency": g.competency, "kind": g.kind,
+                          "postings": g.postings, "rate": round(g.rate, 3),
+                          "breadth": g.breadth, "sentence": g.sentence(),
+                          "near": g.near_sentence,
+                          "similarity": round(g.near_similarity, 3),
+                          "quote": g.quotes[0].text if g.quotes else "",
+                          "source": (g.quotes[0].sources[0].label()
+                                     if g.quotes and g.quotes[0].sources else "")}
+                         for g in m.gaps],
                 "have": [self._evidence(e) for e in m.have],
                 "lack": [self._evidence(e) for e in m.lack],
                 "postings": [{"label": p.source.label(), "url": p.source.url,

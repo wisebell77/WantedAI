@@ -68,6 +68,7 @@ class TextProjector:
         self._cache = Path(embedding_cache or PATHS.l2_embeddings)
         self._model = None
         self._node_vectors = None
+        self._idx = None
 
     @property
     def model(self):
@@ -157,3 +158,35 @@ class TextProjector:
 
     def nodes(self, sentences, **kw) -> set[str]:
         return self.project(sentences, **kw).nodes
+
+    def proximity(self, sentences, nodes, min_length: int = 6):
+        """주어진 노드마다 **가장 가까운 사용자 문장과 그 유사도**.
+
+        project() 와 방향이 반대다. project 는 '이 문장에 붙는 노드'를 찾고,
+        여기는 '이 노드에 가장 가까운 문장'을 찾는다.
+
+        임계를 못 넘어 탈락한 것까지 본다. 그게 요점이다 —
+        0.52 로 스친 역량은 "없다"가 아니라 "거의 닿았다"이고,
+        사용자에게는 그쪽이 훨씬 쓸모 있는 정보다.
+        """
+        import numpy as np
+        sents = [s.strip() for s in sentences if s and len(s.strip()) >= min_length]
+        want = [n for n in nodes if n in self._index]
+        if not sents or not want:
+            return {}
+        E = np.asarray(self.model.encode(
+            sents, batch_size=256, normalize_embeddings=True), dtype="float32")
+        R = self.node_vectors[[self._index[n] for n in want]]
+        sims = E @ R.T                                 # 문장 x 노드
+        out = {}
+        for j, node in enumerate(want):
+            i = int(sims[:, j].argmax())
+            out[node] = (float(sims[i, j]), sents[i])
+        return out
+
+    @property
+    def _index(self) -> dict[str, int]:
+        if getattr(self, "_idx", None) is None:
+            self.node_vectors                          # _names_ordered 를 채운다
+            self._idx = {n: i for i, n in enumerate(self._names_ordered)}
+        return self._idx
