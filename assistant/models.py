@@ -50,11 +50,37 @@ class Posting:
 
 
 @dataclass
+class EssaySection:
+    """자소서 문항 하나 — 질문 + 사용자 답변.
+
+    프론트엔드의 문항별 입력란과 1:1로 대응한다.
+    (예: question="본인의 강점과 관련 경험", answer="학회에서 …")
+    """
+
+    question: str
+    answer: str = ""
+
+
+@dataclass
 class EssayDraft:
-    """사용자가 작성 중인 자소서/지원서 초안."""
+    """공고 하나에 대한 자소서 초안 — 문항(섹션)들의 묶음.
+
+    실제 자소서는 한 덩어리가 아니라 문항별로 쓰이므로 섹션 리스트로 담는다.
+    커버 판정은 답변들을 합친 text 로 수행한다.
+    """
 
     posting_id: str
-    text: str
+    sections: list[EssaySection] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        """전체 답변을 합친 평문 (커버 판정 입력)."""
+        return "\n\n".join(s.answer for s in self.sections if s.answer and s.answer.strip())
+
+    @classmethod
+    def from_text(cls, posting_id: str, text: str = "") -> "EssayDraft":
+        """한 덩어리 텍스트를 단일 문항으로 감싼다(간이 입력/하위호환)."""
+        return cls(posting_id=posting_id, sections=[EssaySection(question="", answer=text)])
 
 
 @dataclass
@@ -64,6 +90,7 @@ class CoverageResult:
     competency: Competency
     status: CoverageStatus
     evidence: Optional[str] = None   # 자소서에서 근거가 된 문장 (없으면 None)
+    section: Optional[str] = None    # 그 근거가 나온 문항 (B 넛지용)
     comment: str = ""                # 수준/보완점에 대한 짧은 설명
 
     @property

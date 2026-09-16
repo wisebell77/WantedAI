@@ -13,7 +13,22 @@ from __future__ import annotations
 from typing import Optional
 
 from .llm import LLMClient
-from .models import CoverageStatus, PostingAnalysis
+from .models import CoverageStatus, EssayDraft, PostingAnalysis
+
+# 미충족 역량을 넣기 좋은 문항을 고를 때 우선하는 키워드(강점/경험 계열)
+_EXPERIENCE_HINTS = ("강점", "경험", "역량", "프로젝트", "활동", "성과")
+
+
+def _target_section(essay: Optional[EssayDraft]) -> Optional[str]:
+    """미충족 역량을 넣기 좋은 문항 제목을 고른다(B 넛지용)."""
+    if not essay or not essay.sections:
+        return None
+    for s in essay.sections:
+        if any(h in s.question for h in _EXPERIENCE_HINTS):
+            return s.question or None
+    # 힌트가 없으면 답변이 가장 긴(=여지 있는) 문항
+    best = max(essay.sections, key=lambda s: len(s.answer or ""))
+    return best.question or None
 
 _SYSTEM = """너는 취업 준비생의 개인 비서다.
 자소서 진행 상황 분석 결과를 받아, 오늘 무엇을 어디까지 할지 짚어주는
@@ -23,14 +38,22 @@ _SYSTEM = """너는 취업 준비생의 개인 비서다.
 - 반드시 JSON으로만 답한다: {"nudge": "...", "today_goal": "..."}"""
 
 
-def make_nudge(analysis: PostingAnalysis, client: Optional[LLMClient] = None) -> dict:
-    """{'nudge': str, 'today_goal': str} 반환."""
+def make_nudge(
+    analysis: PostingAnalysis,
+    client: Optional[LLMClient] = None,
+    essay: Optional[EssayDraft] = None,
+) -> dict:
+    """{'nudge': str, 'today_goal': str} 반환.
+
+    essay 를 주면 미충족 역량을 '어느 문항에 넣을지'까지 짚는다(B 넛지).
+    """
+    target = _target_section(essay)
     if client is not None:
         try:
-            return _nudge_with_llm(analysis, client)
+            return _nudge_with_llm(analysis, client, target)
         except Exception:
             pass
-    return _nudge_template(analysis)
+    return _nudge_template(analysis, target)
 
 
 def _facts(analysis: PostingAnalysis) -> str:
@@ -48,15 +71,20 @@ def _facts(analysis: PostingAnalysis) -> str:
     )
 
 
-def _nudge_with_llm(analysis: PostingAnalysis, client: LLMClient) -> dict:
-    data = client.complete_json(_SYSTEM, _facts(analysis))
+def _nudge_with_llm(
+    analysis: PostingAnalysis, client: LLMClient, target: Optional[str] = None
+) -> dict:
+    facts = _facts(analysis)
+    if target:
+        facts += f"\n추천 문항: '{target}' (미충족 역량을 이 문항에 녹이도록 제안)"
+    data = client.complete_json(_SYSTEM, facts)
     return {
         "nudge": data.get("nudge", "").strip(),
         "today_goal": data.get("today_goal", "").strip(),
     }
 
 
-def _nudge_template(analysis: PostingAnalysis) -> dict:
+def _nudge_template(analysis: PostingAnalysis, target: Optional[str] = None) -> dict:
     p = analysis.posting
     d = analysis.days_left
     total = len(analysis.results)
@@ -82,7 +110,8 @@ def _nudge_template(analysis: PostingAnalysis) -> dict:
     if todo:
         focus = ", ".join(todo[:2])
         tail = "까지" if len(todo) <= 2 else " 등을"
-        goal = f"오늘은 '{focus}'{tail} 자소서에 녹이는 걸 목표로 해요."
+        where = f" '{target}' 문항에" if target else " 자소서에"
+        goal = f"오늘은 '{focus}'{tail}{where} 녹이는 걸 목표로 해요."
     else:
         goal = "요구 역량은 모두 반영됐어요. 오늘은 전체 흐름을 다듬어 마무리해요."
     return {"nudge": nudge, "today_goal": goal}

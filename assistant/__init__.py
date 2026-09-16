@@ -13,32 +13,44 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
+from .briefing import daily_briefing, render_briefing
 from .coverage import judge_coverage
+from .fit import apply_fit, estimate_fit
 from .llm import LLMClient, get_default_client
 from .models import (
     Competency,
     CoverageResult,
     CoverageStatus,
     EssayDraft,
+    EssaySection,
     Posting,
     PostingAnalysis,
 )
 from .nudge import make_nudge
 from .scheduler import PriorityItem, priority_score, rank, urgency
+from .tracker import ApplicationTracker, DraftRef, Snapshot
 
 __all__ = [
     "Competency",
     "Posting",
     "EssayDraft",
+    "EssaySection",
     "CoverageResult",
     "CoverageStatus",
     "PostingAnalysis",
     "judge_coverage",
+    "estimate_fit",
+    "apply_fit",
     "make_nudge",
+    "daily_briefing",
+    "render_briefing",
     "rank",
     "priority_score",
     "urgency",
     "PriorityItem",
+    "ApplicationTracker",
+    "DraftRef",
+    "Snapshot",
     "LLMClient",
     "get_default_client",
     "analyze",

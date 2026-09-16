@@ -21,6 +21,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from assistant import (
     Competency,
     EssayDraft,
+    EssaySection,
     Posting,
     analyze,
     get_default_client,
@@ -65,12 +66,21 @@ def sample_postings() -> list[Posting]:
 
 SAMPLE_ESSAY = EssayDraft(
     posting_id="P1",
-    text=(
-        "학회에서 추천시스템 프로젝트를 진행하며 Python과 pandas로 로그 데이터를 "
-        "전처리했습니다. 사용자 행동 데이터를 SQL로 추출해 분석했고, 결과를 팀원들과 "
-        "공유하며 방향을 함께 조정했습니다. 다만 통계적 검정이나 대시보드 제작 경험은 "
-        "아직 정리해 두지 못했습니다."
-    ),
+    sections=[
+        EssaySection(
+            question="지원 동기",
+            answer="데이터로 사용자 문제를 푸는 일에 매력을 느껴 지원했습니다.",
+        ),
+        EssaySection(
+            question="본인의 강점과 관련 경험",
+            answer=(
+                "학회에서 추천시스템 프로젝트를 진행하며 Python과 pandas로 로그 데이터를 "
+                "전처리했습니다. 사용자 행동 데이터를 SQL로 추출해 분석했고, 결과를 팀원들과 "
+                "공유하며 방향을 함께 조정했습니다. 다만 통계적 검정이나 대시보드 제작 경험은 "
+                "아직 정리해 두지 못했습니다."
+            ),
+        ),
+    ],
 )
 
 
@@ -84,7 +94,7 @@ def main() -> None:
     # 자소서는 P1에 대해 작성 중이라고 가정. P2는 아직 착수 전(빈 초안).
     essays = {
         "P1": SAMPLE_ESSAY,
-        "P2": EssayDraft(posting_id="P2", text=""),
+        "P2": EssayDraft.from_text("P2", ""),
     }
 
     analyses = [analyze(p, essays[p.id], client=client) for p in postings]

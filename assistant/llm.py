@@ -14,6 +14,34 @@ import json
 import os
 from typing import Optional, Protocol
 
+_ENV_LOADED = False
+
+
+def _load_dotenv() -> None:
+    """프로젝트 루트의 .env 를 읽어 환경변수로 주입(의존성 없이).
+
+    이미 환경에 있는 값은 덮어쓰지 않는다. .env 는 .gitignore 로 커밋 제외됨.
+    """
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+    _ENV_LOADED = True
+    root = os.path.dirname(os.path.dirname(__file__))
+    path = os.path.join(root, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key, val = key.strip(), val.strip().strip('"').strip("'")
+                os.environ.setdefault(key, val)
+    except OSError:
+        pass
+
 
 # 저가/저지연 모델을 기본값으로 → 데모/개발 비용 최소화
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
@@ -50,8 +78,10 @@ class AnthropicClient:
 
 def get_default_client() -> Optional[LLMClient]:
     """환경에서 쓸 수 있는 클라이언트를 만든다. 없으면 None."""
+    _load_dotenv()
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    # 실제 Anthropic 키만 인정 (빈 값·placeholder·오타를 걸러 '가짜 LLM 모드'를 막는다)
+    if not api_key or not api_key.startswith("sk-ant-"):
         return None
     try:
         return AnthropicClient(api_key)
