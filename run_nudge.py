@@ -91,9 +91,12 @@ def main() -> None:
     for a in analyses:
         p = a.posting
         tag = " ← 작성 중" if p is active else ""
+        total = len(a.results)
+        matched = len(p.fit_matched or [])
         print(f"[{p.company}] {p.role[:34]}{tag}")
-        print(f"  D-{a.days_left} · 적합도 {p.fit_score:.0%} · 진행도(커버율) {a.coverage_rate:.0%}")
-        print(f"    요구역량({len(a.results)}): " + ", ".join(
+        # 적합도는 '겹침 개수'로(합격확률 오해 방지), 진행도는 그대로 %로
+        print(f"  D-{a.days_left} · 경험 겹침 {matched}/{total}개 · 진행도 {a.coverage_rate:.0%}")
+        print(f"    요구역량({total}): " + ", ".join(
             f"{'●' if r.status.value=='covered' else '○'}{r.competency.name}" for r in a.results))
         # 문항별 근거(어느 문항에서 확인됐나)
         for r in a.results:
@@ -103,7 +106,7 @@ def main() -> None:
         print(f"  💬 {note['nudge']}")
         print(f"  🎯 {note['today_goal']}\n")
 
-    print("=== 오늘의 우선순위 (적합도 × 마감임박도 × 격차) ===")
+    print("=== 오늘의 우선순위 (경험 겹침 × 마감임박도 × 남은 작업) ===")
     for i, item in enumerate(rank(analyses), 1):
         a = item.analysis
         print(f"  {i}. [{a.posting.company}] {a.posting.role[:24]}  "

@@ -72,10 +72,12 @@ def rank(analyses: list[PostingAnalysis]) -> list[PriorityItem]:
         deadline_phrase = (
             "마감 지남" if d < 0 else "오늘 마감" if d == 0 else f"마감 D-{d}"
         )
-        fit = a.posting.fit_score
-        fit_phrase = f"적합도 {fit:.0%} · " if fit is not None else ""
+        total = len(a.results)
+        # 적합도는 '겹침 개수'로(합격확률 오해 방지), 진행도는 그대로 %로
+        matched = a.posting.fit_matched
+        overlap_phrase = f"겹침 {len(matched)}/{total} · " if matched is not None else ""
         reason = (
-            f"{deadline_phrase} · {fit_phrase}커버율 {a.coverage_rate:.0%} · "
+            f"{deadline_phrase} · {overlap_phrase}진행 {a.coverage_rate:.0%} · "
             f"미충족 {len(a.missing())}개"
         )
         items.append(PriorityItem(a, priority_score(a), reason))

@@ -82,8 +82,10 @@ def main() -> None:
     for item in rank(analyses)[:3]:
         a = item.analysis
         note = make_nudge(a, client=client)
-        print(f"  [{a.posting.company}] D-{a.days_left} · 적합도 {(a.posting.fit_score or 0):.0%} "
-              f"· 커버율 {a.coverage_rate:.0%}")
+        total = len(a.results)
+        matched = len(a.posting.fit_matched or [])
+        print(f"  [{a.posting.company}] D-{a.days_left} · 경험 겹침 {matched}/{total}개 "
+              f"· 진행 {a.coverage_rate:.0%}")
         print(f"    🎯 {note['today_goal']}")
 
     # 6) 저장 → 복원 확인

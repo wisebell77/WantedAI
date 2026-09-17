@@ -18,7 +18,7 @@ from datetime import date
 from typing import Optional
 
 from .coverage import judge_coverage
-from .fit import estimate_fit
+from .fit import fit_detail
 from .llm import LLMClient
 from .models import (
     Competency,
@@ -104,9 +104,11 @@ class ApplicationTracker:
         experience_text = self.experience.resolve()
         analyses: list[PostingAnalysis] = []
         for pid, posting in self.postings.items():
-            # fit: 전체 경험 기준(경험이 있으면 자체 추정, 없으면 기존 fit_score 유지)
+            # fit: 전체 경험 기준(경험이 있으면 자체 추정, 없으면 기존 값 유지)
             if experience_text.strip():
-                posting.fit_score = estimate_fit(posting, experience_text, self.client)
+                d = fit_detail(posting, experience_text, self.client)
+                posting.fit_score = d.score
+                posting.fit_matched = d.matched  # 표시용(겹친 역량 개수/목록)
             draft_text = self.drafts.get(pid, DraftRef()).resolve()
             results = judge_coverage(
                 posting, EssayDraft.from_text(pid, draft_text), self.client
@@ -189,6 +191,7 @@ def _posting_to_dict(p: Posting) -> dict:
         "role": p.role,
         "deadline": p.deadline.isoformat(),
         "fit_score": p.fit_score,
+        "fit_matched": p.fit_matched,
         "required_competencies": [
             {"name": c.name, "importance": c.importance,
              "required_level": c.required_level, "source_excerpt": c.source_excerpt}
@@ -204,6 +207,7 @@ def _posting_from_dict(d: dict) -> Posting:
         role=d.get("role", "?"),
         deadline=date.fromisoformat(d["deadline"]),
         fit_score=d.get("fit_score"),
+        fit_matched=d.get("fit_matched"),
         required_competencies=[
             Competency(
                 name=c["name"],

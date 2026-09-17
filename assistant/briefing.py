@@ -70,9 +70,11 @@ def render_briefing(b: dict) -> str:
 
     a = focus.analysis
     when = "오늘 마감" if a.days_left == 0 else f"D-{a.days_left}"
+    total = len(a.results)
+    matched = len(a.posting.fit_matched or [])
     lines.append(
         f"🎯 오늘은 [{a.posting.company}]에 집중하세요 "
-        f"({when} · 적합도 {(a.posting.fit_score or 0):.0%})."
+        f"({when} · 경험 겹침 {matched}/{total}개)."
     )
     if b["focus_goal"]:
         lines.append(f"   → {b['focus_goal']}")
@@ -80,8 +82,10 @@ def render_briefing(b: dict) -> str:
     nxt: Optional[PriorityItem] = b["next_up"]
     if nxt is not None:
         na = nxt.analysis
+        ntotal = len(na.results)
+        nmatched = len(na.posting.fit_matched or [])
         lines.append(
             f"   그다음: [{na.posting.company}] D-{na.days_left} "
-            f"(적합도 {(na.posting.fit_score or 0):.0%}, 진행 {na.coverage_rate:.0%})"
+            f"(겹침 {nmatched}/{ntotal}, 진행 {na.coverage_rate:.0%})"
         )
     return "\n".join(lines)

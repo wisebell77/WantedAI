@@ -15,7 +15,7 @@ from typing import Optional
 
 from .briefing import daily_briefing, render_briefing
 from .coverage import judge_coverage
-from .fit import apply_fit, estimate_fit
+from .fit import FitResult, apply_fit, estimate_fit, fit_detail
 from .llm import (
     LLMClient,
     get_default_client,
@@ -45,6 +45,8 @@ __all__ = [
     "PostingAnalysis",
     "judge_coverage",
     "estimate_fit",
+    "fit_detail",
+    "FitResult",
     "apply_fit",
     "make_nudge",
     "daily_briefing",

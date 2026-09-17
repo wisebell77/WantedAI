@@ -13,11 +13,50 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional, Union
 
 from .coverage import judge_coverage
 from .llm import LLMClient
-from .models import EssayDraft, Posting
+from .models import CoverageStatus, EssayDraft, Posting
+
+
+@dataclass
+class FitResult:
+    """적합도 상세 — 정렬용 연속값(score) + 화면용 근거(개수/목록)."""
+
+    score: float                              # 0~1 (우선순위 계산용)
+    matched: list[str] = field(default_factory=list)   # 경험과 겹치는 역량
+    partial: list[str] = field(default_factory=list)   # 부분적으로 겹침
+    missing: list[str] = field(default_factory=list)   # 경험에 없는 역량
+    total: int = 0                            # 요구 역량 총개수
+
+
+def fit_detail(
+    posting: Posting,
+    experience: Union[str, EssayDraft],
+    client: Optional[LLMClient] = None,
+) -> FitResult:
+    """경험 ↔ 요구역량 겹침을 상세히 판정.
+
+    coverage 와 동일한 판정을 '자소서 초안'이 아닌 '전체 경험'에 대해 수행한다.
+    score(정렬용)는 중요도 가중·partial 0.5, 화면엔 matched 개수/목록을 쓴다.
+    """
+    if isinstance(experience, str):
+        experience = EssayDraft.from_text(posting.id, experience)
+
+    results = judge_coverage(posting, experience, client)
+    total_w = sum(r.competency.importance for r in results)
+    score = 0.0 if total_w == 0 else round(
+        sum(r.competency.importance * r.credit for r in results) / total_w, 3
+    )
+    return FitResult(
+        score=score,
+        matched=[r.competency.name for r in results if r.status == CoverageStatus.COVERED],
+        partial=[r.competency.name for r in results if r.status == CoverageStatus.PARTIAL],
+        missing=[r.competency.name for r in results if r.status == CoverageStatus.MISSING],
+        total=len(results),
+    )
 
 
 def estimate_fit(
@@ -25,20 +64,8 @@ def estimate_fit(
     experience: Union[str, EssayDraft],
     client: Optional[LLMClient] = None,
 ) -> float:
-    """사용자 전체 경험이 이 공고 요구 역량과 얼마나 겹치는지 (0~1).
-
-    coverage 와 동일한 판정을 '자소서 초안'이 아닌 '전체 경험'에 대해 수행한다.
-    partial 은 0.5로 부분 인정, 중요도로 가중한다.
-    """
-    if isinstance(experience, str):
-        experience = EssayDraft.from_text(posting.id, experience)
-
-    results = judge_coverage(posting, experience, client)
-    total = sum(r.competency.importance for r in results)
-    if total == 0:
-        return 0.0
-    got = sum(r.competency.importance * r.credit for r in results)
-    return round(got / total, 3)
+    """적합도 연속값(0~1)만 필요할 때 (정렬용)."""
+    return fit_detail(posting, experience, client).score
 
 
 def apply_fit(
@@ -46,7 +73,9 @@ def apply_fit(
     experience: Union[str, EssayDraft],
     client: Optional[LLMClient] = None,
 ) -> list[Posting]:
-    """여러 공고에 추정 fit_score 를 채워 넣는다(제자리 수정 후 반환)."""
+    """여러 공고에 fit_score(정렬용) + fit_matched(표시용)를 채운다(제자리 수정)."""
     for p in postings:
-        p.fit_score = estimate_fit(p, experience, client)
+        d = fit_detail(p, experience, client)
+        p.fit_score = d.score
+        p.fit_matched = d.matched
     return postings
