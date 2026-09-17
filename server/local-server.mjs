@@ -69,12 +69,12 @@ async function readJson(req) {
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
   catch { const error = new Error("INVALID_JSON"); error.code = "INVALID_JSON"; throw error; }
 }
-async function readBody(req, limit = 120 * 1024 * 1024) {
+async function readBody(req, limit = 120 * 1024 * 1024, tooLargeCode = "AUDIO_TOO_LARGE") {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) { const error = new Error("AUDIO_TOO_LARGE"); error.code = "AUDIO_TOO_LARGE"; throw error; }
+    if (size > limit) { const error = new Error(tooLargeCode); error.code = tooLargeCode; throw error; }
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -105,6 +105,26 @@ async function transcribeWithFasterWhisper(audio, prompt = "") {
     await rm(workDir, { recursive: true, force: true });
   }
 }
+async function analyzeWithMediaPipe(video) {
+  const workDir = await mkdtemp(join(tmpdir(), "overlap-video-"));
+  const videoPath = join(workDir, "interview.webm");
+  const python = process.env.PYTHON_BIN || join(root, ".venv", "bin", "python");
+  try {
+    await writeFile(videoPath, video);
+    const output = await new Promise((resolve, reject) => {
+      const child = spawn(python, [join(root, "server", "analyze_video.py"), videoPath], { stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("error", reject);
+      child.on("close", (code) => code === 0 ? resolve(stdout) : reject(new Error(stderr || stdout || "MEDIAPIPE_FAILED")));
+    });
+    return JSON.parse(output);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
 async function runPersonaBridge(input) {
   const python = process.env.PYTHON_BIN || join(root, ".venv", "bin", "python");
   return new Promise((resolve, reject) => {
@@ -128,6 +148,36 @@ async function runPersonaBridge(input) {
 }
 const validModes = new Set(["timeline", "task_prioritization", "jd_tagging", "cover_letter_guide", "consultation", "interview_feedback"]);
 const interviewPersonas = new Map();
+async function evaluateInterviewTranscript(postingId, job, question, itemId, transcript) {
+  let persona = interviewPersonas.get(postingId);
+  if (!persona) {
+    persona = await runPersonaBridge({ action: "persona", posting: job });
+    interviewPersonas.set(postingId, persona);
+  }
+  if (!persona.rubric.items.length || !persona.questions.length) throw new Error("JOB_RUBRIC_UNAVAILABLE");
+  const selectedItemId = itemId || persona.questions[0]?.item_id;
+  if (!persona.rubric.items.some((item) => item.id === selectedItemId)) throw new Error("VALID_RUBRIC_ITEM_REQUIRED");
+  const result = await runPersonaBridge({
+    action: "evaluate",
+    rubric: persona.rubric,
+    itemId: selectedItemId,
+    answer: transcript
+  });
+  const selectedQuestion = question || persona.questions.find((item) => item.item_id === selectedItemId)?.question || "";
+  return {
+    feedback: [{ label: result.label, title: `${result.label} · ${result.score}/3`, body: result.feedback, type: result.score >= 2 ? "good" : "improve" }],
+    followupQuestion: result.followupQuestion,
+    evidence: [
+      { source: "JD", quote: result.jdQuote },
+      ...(result.answerEvidence ? [{ source: "답변", quote: result.answerEvidence }] : [])
+    ],
+    score: result.score,
+    note: result.note,
+    modelUsed: result.modelUsed,
+    itemId: selectedItemId,
+    question: selectedQuestion
+  };
+}
 function fallbackActions(input) {
   const skills = input.jobContext.requiredSkills.slice(0, 3).join(", ") || "공고의 필수 조건";
   if (input.mode === "task_prioritization") return [
@@ -284,6 +334,43 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 503, { error: "FASTER_WHISPER_UNAVAILABLE" });
       }
     }
+    if (req.method === "POST" && url.pathname === "/api/v1/interview/analyze") {
+      const video = await readBody(req, 120 * 1024 * 1024, "VIDEO_TOO_LARGE");
+      if (!video.length) return sendJson(res, 422, { error: "VIDEO_REQUIRED" });
+      try {
+        // The temporary video is deleted in analyzeWithMediaPipe's finally block.
+        return sendJson(res, 200, await analyzeWithMediaPipe(video));
+      } catch (error) {
+        console.error("MediaPipe error:", error.message);
+        return sendJson(res, 503, { error: error.message.startsWith("MEDIAPIPE_") ? error.message : "MEDIAPIPE_UNAVAILABLE" });
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/api/v1/interview/process") {
+      const video = await readBody(req, 120 * 1024 * 1024, "VIDEO_TOO_LARGE");
+      if (!video.length) return sendJson(res, 422, { error: "VIDEO_REQUIRED" });
+      const job = contexts.find((row) => row.postingId === url.searchParams.get("postingId"));
+      try {
+        const [videoAnalysis, transcription] = await Promise.all([
+          analyzeWithMediaPipe(video),
+          transcribeWithFasterWhisper(video, transcriptionPrompt(job))
+        ]);
+        let personaEvaluation = null;
+        if (job && transcription.text) {
+          const persona = interviewPersonas.get(job.postingId);
+          const selectedQuestion = url.searchParams.get("question") || persona?.questions?.[0]?.question || "";
+          const selectedItemId = url.searchParams.get("itemId") || persona?.questions?.[0]?.item_id || "";
+          try {
+            personaEvaluation = await evaluateInterviewTranscript(job.postingId, job, selectedQuestion, selectedItemId, transcription.text);
+          } catch (error) {
+            personaEvaluation = { error: error.message === "JOB_RUBRIC_UNAVAILABLE" ? error.message : "INTERVIEW_PERSONA_EVALUATION_UNAVAILABLE" };
+          }
+        }
+        return sendJson(res, 200, { videoAnalysis, transcription, personaEvaluation, retention: "deleted-after-processing" });
+      } catch (error) {
+        console.error("Interview processing error:", error.message);
+        return sendJson(res, 503, { error: error.message.startsWith("MEDIAPIPE_") ? error.message : "INTERVIEW_PROCESSING_UNAVAILABLE" });
+      }
+    }
     const requested = url.pathname === "/" ? "/coach.html" : url.pathname;
     const filePath = normalize(join(dist, requested));
     if (!filePath.startsWith(dist)) return sendJson(res, 403, { error: "FORBIDDEN" });
@@ -293,6 +380,7 @@ const server = createServer(async (req, res) => {
   } catch (error) {
     if (error.code === "INVALID_JSON") return sendJson(res, 400, { error: "INVALID_JSON" });
     if (error.code === "AUDIO_TOO_LARGE") return sendJson(res, 413, { error: "AUDIO_TOO_LARGE" });
+    if (error.code === "VIDEO_TOO_LARGE") return sendJson(res, 413, { error: "VIDEO_TOO_LARGE" });
     if (error.code === "ENOENT") return sendJson(res, 404, { error: "NOT_FOUND" });
     console.error(error);
     sendJson(res, 500, { error: "INTERNAL_ERROR" });

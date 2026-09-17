@@ -11,7 +11,9 @@ _SENT = re.compile(r"(?<=[.!?。])\s+|\n+")
 
 
 def norm(s: str) -> str:
-    return _WS.sub(" ", (s or "")).strip()
+    # Crawled JD pages often contain zero-width spaces between Korean words.
+    # They are layout artifacts, not meaningful evidence characters.
+    return _WS.sub(" ", (s or "").replace("\u200b", "")).strip()
 
 
 def verify_quote(quote: str, source: str, min_len: int = 4) -> bool:

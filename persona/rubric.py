@@ -60,9 +60,9 @@ def _keywords(text: str, techs: list[str]) -> list[str]:
 
 
 def _heuristic_items(doc: RoleDoc) -> list[dict]:
-    items, kind = [], "duty"
+    items, kind = [], None
     for raw in doc.text.splitlines():
-        line = raw.strip()
+        line = re.sub(r"\u200b", "", raw).strip()
         if not line:
             continue
         m = _INLINE.match(line)
@@ -80,9 +80,16 @@ def _heuristic_items(doc: RoleDoc) -> list[dict]:
             continue
         if _BULLET.match(line):
             items += [(kind, p) for p in _split_top(body)]
+            continue
+        # Greeting pages often omit bullets. Once inside a JD section, keep
+        # plain requirement/duty lines and ignore page metadata before it.
+        if kind and len(line) <= 90 and not _SKIP.search(line):
+            items.append((kind, line))
 
     seen, out = set(), []
     for k, text in items:
+        if k not in KIND_WEIGHT:
+            continue
         text = text.strip(" -·")
         if not (4 <= len(text) <= 70) or _SKIP.search(text) or text in seen:
             continue
@@ -92,7 +99,20 @@ def _heuristic_items(doc: RoleDoc) -> list[dict]:
     rank = {"required": 0, "duty": 1, "preferred": 2}
     out.sort(key=lambda it: (rank[it["kind"]],
                              -sum(t.lower() in it["jd_quote"].lower() for t in doc.techs)))
-    return out[:MAX_ITEMS]
+    if out:
+        return out[:MAX_ITEMS]
+    # Some crawled postings are plain paragraphs rather than bullet lists.
+    # Keep a small grounded fallback so persona creation is still testable
+    # when the LLM is unavailable.
+    fallback = []
+    for text in doc.techs + re.split(r"[\n.!?。！？]", doc.text):
+        text = re.sub(r"\s+", " ", text).strip(" -·")
+        if (4 <= len(text) <= 70 and not _SKIP.search(text)
+                and not re.search(r"20\d{2}|고용형태|회사명|직무명", text)
+                and text not in {doc.corp, doc.role, doc.post_title}
+                and text not in {x["jd_quote"] for x in fallback}):
+            fallback.append({"kind": "required", "label": text[:40], "jd_quote": text})
+    return fallback[:MAX_ITEMS]
 
 
 def _followup(item: dict) -> str:
@@ -150,11 +170,12 @@ def build_rubric(doc: RoleDoc, use_llm: bool = True) -> dict:
         it["weight"] = round(it["weight"] / total, 3) if total else 0
 
     focus = [it["label"] for it in sorted(items, key=lambda x: -x["weight"])[:3]]
+    persona_role = doc.role if doc.role and doc.role != doc.corp else (doc.post_title or doc.job)
     persona = {
-        "name": f"{doc.corp} {doc.job} 채용담당자",
+        "name": f"{doc.corp} {persona_role} 채용담당자",
         "focus": focus,
         "system_prompt": (
-            f"당신은 {doc.corp}의 '{doc.role}' 채용담당자다. 공고와 채점표에 적힌 기준으로만 판단한다. "
+            f"당신은 {doc.corp}의 '{doc.role or doc.job}' 채용담당자다. 공고와 채점표에 적힌 기준으로만 판단한다. "
             f"특히 {', '.join(focus)}을(를) 본다. 지원자에게 없는 경험을 가정하지 않고, "
             "합격 가능성·성격·외모 등은 평가하지 않는다. 정중하지만 구체적으로 묻는다."),
     }

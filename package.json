@@ -2,6 +2,9 @@
   "name": "overlap-career-coach-mvp",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "node server/local-server.mjs" }
+  "scripts": {
+    "dev": "node server/local-server.mjs",
+    "transcribe": "python server/transcribe.py",
+    "analyze-video": "python server/analyze_video.py"
+  }
 }
-

@@ -1,0 +1,6 @@
+av>=12
+faster-whisper>=1.2
+# Pin the MediaPipe Tasks release used by this MVP; newer 1.x/macOS builds
+# can initialize the Metal delegate and abort on headless/video execution.
+mediapipe==0.10.21
+certifi>=2024.2.2
