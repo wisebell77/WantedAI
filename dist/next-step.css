@@ -95,3 +95,15 @@ body{background:linear-gradient(180deg,#f5f9ff 0,#fbfdff 420px,#f8fbff 100%);fon
 
 button.calendar-entry{margin:0;padding:0;border:0;background:none;box-shadow:none;cursor:pointer;font-family:inherit;line-height:1.2;text-align:left}
 .posting-card .card-note{margin:0 0 10px;color:#8a6a3c;font-size:11.5px;line-height:1.6;word-break:keep-all}
+
+/* 랜딩 로고 — 아주 살짝 확대 */
+.landing-brand{gap:16px;font-size:33px}
+.brand-step{width:54px;height:54px;border-radius:17px;font-size:28px}
+@media(max-width:640px){.landing-brand{font-size:27px;gap:13px}.brand-step{width:46px;height:46px;border-radius:15px;font-size:24px}}
+/* 랜딩 로고 ↔ 아래 문구 간격 살짝 축소 */
+.landing-brand{margin-bottom:76px}
+@media(max-width:640px){.landing-brand{margin-bottom:80px}}
+/* 랜딩 — 문구 사이 여백 축소 (본문·버튼·안내를 살짝 위로) */
+.landing h1{margin-bottom:15px}
+.landing-copy>p{margin-bottom:23px}
+.landing-note{margin-top:14px!important}
