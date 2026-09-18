@@ -220,8 +220,14 @@ function recommend() {
   const category=experienceCategories[state.experienceCategory];
   return shell(`<main class="page"><div class="page-head"><div><h1>내 경험과 닿는 직무 찾기</h1><p>경험의 근거를 읽고, 예상하지 못했던 직무까지 연결해요.</p></div></div>${r
     ? `<section class="panel recommendation-stage result-stage"><div id="recommend-results">${renderRecommendation(r)}</div></section>`
-    : `<section class="panel recommendation-stage input-stage"><div class="experience-tabs" role="tablist" aria-label="경험 카테고리">${Object.entries(experienceCategories).map(([key,item])=>`<button class="experience-tab ${state.experienceCategory===key?'active':''}" role="tab" aria-selected="${state.experienceCategory===key}" data-experience-category="${key}">${item.label}</button>`).join("")}</div><div class="hint">이렇게 써보세요: “${category.example.replace(/^예: /,"") }”</div>
-      <textarea class="textarea" id="experience-input" aria-label="${category.label} 경험 입력" placeholder="${category.placeholder}">${safe(state.experienceInputs[state.experienceCategory] || "")}</textarea><div class="form-foot"><small>카테고리별 입력 내용은 전환 후에도 유지돼요.</small><button class="button primary" id="run-recommend">직무 연결 분석하기</button></div></section>`}</main>`);
+    : `<section class="panel recommendation-stage input-stage"><div class="experience-layout">
+      <aside class="experience-side"><div class="experience-col-head"><h2>경험 유형 선택</h2><p>작성할 경험을 선택해주세요.</p></div>
+        <div class="experience-tabs" role="tablist" aria-label="경험 카테고리">${Object.entries(experienceCategories).map(([key,item])=>`<button class="experience-tab ${state.experienceCategory===key?'active':''}" role="tab" aria-selected="${state.experienceCategory===key}" data-experience-category="${key}">${item.label}</button>`).join("")}</div></aside>
+      <div class="experience-main"><div class="experience-col-head"><h2>경험 내용 입력</h2><p>선택한 경험에 대해 구체적으로 작성해주세요.</p></div>
+        <div class="hint">이렇게 써보세요: “${category.example.replace(/^예: /,"") }”</div>
+        <textarea class="textarea" id="experience-input" aria-label="${category.label} 경험 입력" placeholder="${category.placeholder}">${safe(state.experienceInputs[state.experienceCategory] || "")}</textarea>
+        <div class="form-foot"><small>카테고리별 입력 내용은 전환 후에도 유지돼요.</small><button class="button primary" id="run-recommend">직무 연결 분석하기</button></div></div>
+    </div></section>`}</main>`);
 }
 function renderRecommendation(result) {
   if(!result) return "";

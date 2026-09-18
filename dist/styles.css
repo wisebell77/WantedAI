@@ -24,3 +24,7 @@ button{padding:11px 15px;border-radius:12px;transition:transform .16s,border-col
 @media(max-width:800px){.topbar-left{gap:9px}.back-link{min-height:38px;padding:0 11px;font-size:.76rem}}
 
 .practice-job{margin:-8px 0 4px;padding:10px 12px;border:1px solid #d9e6fa;border-radius:12px;background:#f3f8ff;color:#31507d;font-size:.85rem;line-height:1.55;word-break:keep-all}
+/* 다음 질문 버튼 — 좁아져서 글자가 줄바꿈되던 문제 */
+.icon-button{flex:none;white-space:nowrap}
+/* 내 답변 — 제목 줄과 입력창 사이 간격 */
+.transcript-card .card-heading{margin-bottom:14px}

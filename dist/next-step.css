@@ -113,3 +113,52 @@ button.calendar-entry{margin:0;padding:0;border:0;background:none;box-shadow:non
 .priority-card-action{min-height:0;padding-top:9px;align-items:center}
 @media(max-width:900px){.home-priority-cards .priority-card{min-height:258px}}
 @media(max-width:640px){.home-priority-cards .priority-card{grid-template-rows:auto minmax(72px,1fr) 22px auto;min-height:240px;padding:23px 22px}}
+/* 직무 추천 — 흰 panel 을 다른 화면과 같은 좌우 기준선까지 넓히고,
+   늘어난 폭은 안쪽 padding 으로 흡수해 내부 콘텐츠 폭/위치는 그대로 둔다. */
+.recommendation-stage{max-width:none;margin:0;padding-left:max(26px,(100% - 868px)/2);padding-right:max(26px,(100% - 868px)/2)}
+/* 직무 추천 — 넓어진 좌우 여백에 맞춰 위쪽도 함께 확보 */
+.recommendation-stage{padding-top:52px}
+@media(max-width:900px){.recommendation-stage{padding-top:34px}}
+/* 직무 추천 입력 — 좌: 경험 유형 선택 / 우: 경험 내용 입력 (2단) */
+.experience-layout{display:grid;grid-template-columns:262px minmax(0,1fr);gap:0;align-items:start}
+.experience-side{padding-right:36px}
+.experience-main{padding-left:36px;border-left:1px solid #e3ebf7;min-width:0}
+/* 양쪽 소제목/안내 문구 블록을 동일한 높이로 고정해 다음 행이 같은 y에서 시작하도록 */
+.experience-col-head{min-height:62px;margin-bottom:22px}
+.experience-col-head h2{margin:0 0 7px;font-size:17px;line-height:1.35;color:#16233b;letter-spacing:-.3px}
+.experience-col-head p{margin:0;font-size:13px;line-height:1.6;color:#7085a3;word-break:keep-all}
+/* 좌측 탭을 세로 카드로 */
+.experience-side .experience-tabs{display:flex;flex-direction:column;gap:10px;margin:0}
+.experience-side .experience-tab{width:100%;min-height:54px;padding:0 18px;border:1px solid #e3ebf7;border-radius:14px;background:#fff;color:#4a5d78;font-size:14px;font-weight:700;text-align:left;transition:background .15s,border-color .15s,color .15s}
+.experience-side .experience-tab:hover{border-color:#c6dcfb;background:#f7faff}
+.experience-side .experience-tab.active{background:#e8f0ff;border-color:#cfe0fb;color:var(--blue);font-weight:800}
+.experience-main .hint{margin:0 0 14px}
+.experience-main .textarea{min-height:210px}
+.experience-main .form-foot{margin-top:18px}
+@media(max-width:900px){
+  .experience-layout{grid-template-columns:1fr;gap:26px}
+  .experience-side{padding-right:0}
+  .experience-main{padding-left:0;border-left:0;border-top:1px solid #e3ebf7;padding-top:26px}
+  .experience-col-head{min-height:0;margin-bottom:16px}
+  .experience-side .experience-tabs{flex-direction:row;flex-wrap:wrap}
+  .experience-side .experience-tab{width:auto;min-height:44px;padding:0 15px}
+}
+/* 경험 입력 panel — 내부 가운데 정렬 제한을 풀고 20:80 2열로 */
+.recommendation-stage.input-stage{padding-left:38px;padding-right:38px}
+.input-stage .experience-layout{grid-template-columns:minmax(0,20fr) minmax(0,80fr)}
+.input-stage .experience-side{padding-right:24px}
+.input-stage .experience-main{padding-left:30px}
+.input-stage .experience-col-head{min-height:56px;margin-bottom:18px}
+.input-stage .experience-col-head p{white-space:nowrap;font-size:12.5px}
+/* 왼쪽 선택 메뉴 — 카드가 아니라 compact 한 세로 메뉴로 */
+.input-stage .experience-side .experience-tabs{gap:6px}
+.input-stage .experience-side .experience-tab{width:152px;min-height:40px;padding:0 14px;border-radius:10px;font-size:13px;white-space:nowrap}
+@media(max-width:900px){
+  .recommendation-stage.input-stage{padding-left:26px;padding-right:26px}
+  .input-stage .experience-layout{grid-template-columns:1fr}
+  .input-stage .experience-side{padding-right:0}
+  .input-stage .experience-main{padding-left:0}
+  .input-stage .experience-col-head{min-height:0}
+  .input-stage .experience-col-head p{white-space:normal}
+  .input-stage .experience-side .experience-tab{width:auto}
+}

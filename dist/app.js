@@ -426,6 +426,7 @@ function startRecording() {
   state.visual = emptyVisual();
   state.recorder = new MediaRecorder(state.stream);
   $("recording-checklist").hidden = true;
+  $("live-caption").textContent = "";
   state.recorder.ondataavailable = (event) => { if (event.data.size) state.chunks.push(event.data); };
   state.recorder.onstop = () => {
     state.recordedBlob = new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" });
