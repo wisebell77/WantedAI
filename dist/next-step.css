@@ -107,3 +107,9 @@ button.calendar-entry{margin:0;padding:0;border:0;background:none;box-shadow:non
 .landing h1{margin-bottom:15px}
 .landing-copy>p{margin-bottom:23px}
 .landing-note{margin-top:14px!important}
+/* 홈 상단 카드 — 아이콘/라벨 줄 제거에 맞춰 4행 그리드로 축소 */
+.home-priority-cards .priority-card{grid-template-rows:auto minmax(84px,1fr) 24px auto;min-height:268px;padding:29px 32px}
+.priority-card h2{margin:0}
+.priority-card-action{min-height:0;padding-top:9px;align-items:center}
+@media(max-width:900px){.home-priority-cards .priority-card{min-height:258px}}
+@media(max-width:640px){.home-priority-cards .priority-card{grid-template-rows:auto minmax(72px,1fr) 22px auto;min-height:240px;padding:23px 22px}}

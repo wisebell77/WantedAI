@@ -116,7 +116,7 @@ test("home keeps the two priority cards together and opens calendar as a modal",
   assert.match(source, /준비 이어가기/);
   assert.match(source, /캘린더 보기 →/);
   assert.doesNotMatch(source, /todo-arrow|클릭해서 통합 캘린더 보기/);
-  assert.match(styles, /grid-template-rows:38px auto minmax\(84px,1fr\) 24px 46px/);
+  assert.match(styles, /grid-template-rows:auto minmax\(84px,1fr\) 24px auto/);
   assert.match(styles, /button\.calendar-entry\{margin:0;padding:0;border:0;background:none/);
 });
 
