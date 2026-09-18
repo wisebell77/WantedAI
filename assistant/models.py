@@ -1,0 +1,139 @@
+"""핵심 데이터 모델.
+
+이 모듈의 자료구조가 AI 비서 파트의 '계약(contract)'이다.
+특히 `Competency`/`Posting`은 Overlap 파트가 넘겨주는 역량 데이터의 형태를
+그대로 받는 자리이므로, Overlap 산출 스키마가 확정되면 여기만 맞추면 된다.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date
+from enum import Enum
+from typing import Optional
+
+
+class CoverageStatus(str, Enum):
+    """자소서가 특정 요구 역량을 얼마나 드러내고 있는지."""
+
+    COVERED = "covered"      # 충분히 드러남
+    PARTIAL = "partial"      # 언급은 되나 근거/수준이 부족
+    MISSING = "missing"      # 전혀 드러나지 않음
+
+
+@dataclass
+class Competency:
+    """공고가 요구하는 역량 하나. (Overlap 파트 산출물의 최소 단위)
+
+    Overlap이 '공고 → 역량 정규화 + 요구 수준 추출'을 마친 결과를 받는다고 가정한다.
+    """
+
+    name: str                      # 정규화된 역량명 (예: "SQL", "데이터 전처리")
+    importance: float = 1.0        # 요구 빈도/중요도 가중치 (0~1 권장, Overlap이 산정)
+    required_level: str = ""       # 요구 수준 (예: "쿼리 작성", "프로젝트 활용 경험")
+    source_excerpt: str = ""       # 근거가 된 공고 원문 일부 (근거 제시용)
+
+
+@dataclass
+class Posting:
+    """사용자가 트래킹 중인 채용 공고 하나."""
+
+    id: str
+    company: str
+    role: str
+    deadline: date
+    required_competencies: list[Competency] = field(default_factory=list)
+    # 적합도: 사용자의 '전체 경험'이 이 직무 요구와 얼마나 겹치는지 (0~1).
+    # Overlap 진단 파트가 산출해 넘겨주는 값. 자소서 진행도(커버율)와는 다른 축이다.
+    # None이면 우선순위에서 중립(1.0)으로 취급한다.
+    # ※ 계산(정렬)에는 이 연속값을 쓰되, 화면에는 %가 아니라 겹친 역량 개수/목록으로 보여준다
+    #   ("72%로 붙는다"는 오해를 피하려는 것 — 기획서 원칙).
+    fit_score: Optional[float] = None
+    fit_matched: Optional[list[str]] = None  # 경험과 겹치는 요구역량 이름들 (표시용)
+
+
+@dataclass
+class EssaySection:
+    """자소서 문항 하나 — 질문 + 사용자 답변.
+
+    프론트엔드의 문항별 입력란과 1:1로 대응한다.
+    (예: question="본인의 강점과 관련 경험", answer="학회에서 …")
+    """
+
+    question: str
+    answer: str = ""
+
+
+@dataclass
+class EssayDraft:
+    """공고 하나에 대한 자소서 초안 — 문항(섹션)들의 묶음.
+
+    실제 자소서는 한 덩어리가 아니라 문항별로 쓰이므로 섹션 리스트로 담는다.
+    커버 판정은 답변들을 합친 text 로 수행한다.
+    """
+
+    posting_id: str
+    sections: list[EssaySection] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        """전체 답변을 합친 평문 (커버 판정 입력)."""
+        return "\n\n".join(s.answer for s in self.sections if s.answer and s.answer.strip())
+
+    @classmethod
+    def from_text(cls, posting_id: str, text: str = "") -> "EssayDraft":
+        """한 덩어리 텍스트를 단일 문항으로 감싼다(간이 입력/하위호환)."""
+        return cls(posting_id=posting_id, sections=[EssaySection(question="", answer=text)])
+
+
+@dataclass
+class CoverageResult:
+    """역량 하나에 대한 커버 판정 결과."""
+
+    competency: Competency
+    status: CoverageStatus
+    evidence: Optional[str] = None   # 자소서에서 근거가 된 문장 (없으면 None)
+    section: Optional[str] = None    # 그 근거가 나온 문항 (B 넛지용)
+    comment: str = ""                # 수준/보완점에 대한 짧은 설명
+
+    @property
+    def credit(self) -> float:
+        """커버율 계산 시 이 역량이 받는 점수 비율 (partial은 절반)."""
+        return {
+            CoverageStatus.COVERED: 1.0,
+            CoverageStatus.PARTIAL: 0.5,
+            CoverageStatus.MISSING: 0.0,
+        }[self.status]
+
+
+@dataclass
+class PostingAnalysis:
+    """공고 하나에 대한 종합 분석 (커버율 + 격차 + 마감)."""
+
+    posting: Posting
+    results: list[CoverageResult]
+    as_of: date
+
+    @property
+    def days_left(self) -> int:
+        return (self.posting.deadline - self.as_of).days
+
+    @property
+    def coverage_rate(self) -> float:
+        """중요도 가중 커버율 (0~1)."""
+        total_w = sum(r.competency.importance for r in self.results)
+        if total_w == 0:
+            return 0.0
+        got = sum(r.competency.importance * r.credit for r in self.results)
+        return got / total_w
+
+    @property
+    def gap(self) -> float:
+        """격차 = 1 - 커버율."""
+        return 1.0 - self.coverage_rate
+
+    def missing(self) -> list[CoverageResult]:
+        return [r for r in self.results if r.status == CoverageStatus.MISSING]
+
+    def partial(self) -> list[CoverageResult]:
+        return [r for r in self.results if r.status == CoverageStatus.PARTIAL]

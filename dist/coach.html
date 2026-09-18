@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="실제 채용공고 근거로 취업 준비를 관리하는 Overlap AI 커리어 코치 MVP" />
+  <title>Overlap AI Career Coach</title>
+  <link rel="stylesheet" href="./coach.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./coach.html">Overlap</a>
+    <a class="interview-link" href="./index.html">면접 연습</a>
+  </header>
+  <main class="workspace">
+    <aside class="context-panel">
+      <h1>직무 정보</h1>
+      <label for="job-filter">직무군</label>
+      <select id="job-filter"><option value="">전체 직무</option></select>
+      <label for="posting-select">수집된 채용공고</label>
+      <select id="posting-select"><option>불러오는 중...</option></select>
+      <article id="job-card" class="job-card" hidden>
+        <div><span id="job-tier" class="tier"></span></div>
+        <h2 id="job-title"></h2>
+        <p id="job-company"></p>
+        <div id="job-skills" class="chips"></div>
+        <a id="job-source" target="_blank" rel="noreferrer">공고 원문 확인 ↗</a>
+      </article>
+      <label for="deadline">지원 마감일 <small id="deadline-note"></small></label>
+      <input id="deadline" type="date" />
+      <label for="experience">내 경험·현재 준비 상태</label>
+      <textarea id="experience" placeholder="예: SQL로 고객 이탈 분석 프로젝트를 했고, 자소서 초안은 아직 없습니다."></textarea>
+      <button id="save-profile" class="secondary">준비 상태 저장</button>
+      <p id="data-status" class="status" aria-live="polite"></p>
+    </aside>
+
+    <section class="coach-panel">
+      <div class="coach-heading">
+        <div><h2>준비 관리</h2></div>
+        <span id="agent-state" class="agent-state">Agent 연결 확인 전</span>
+      </div>
+      <div class="quick-actions">
+        <button data-mode="timeline">타임라인 생성</button>
+        <button data-mode="cover_letter_guide">자소서 시작</button>
+        <button data-mode="task_prioritization">이번 주 할 일</button>
+      </div>
+
+      <section class="timeline-card">
+        <div class="section-title"><h3>할 일</h3></div>
+        <ol id="task-list"><li class="empty">아직 할 일이 없습니다.</li></ol>
+      </section>
+
+      <section class="chat-card">
+        <div class="section-title"><h3>AI 코치</h3></div>
+        <div id="messages" class="messages">
+          <article class="message assistant">공고와 경험을 입력한 뒤 요청하세요.</article>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <label class="sr-only" for="chat-input">AI 코치에게 질문</label>
+          <textarea id="chat-input" placeholder="예: 이 공고에 지원하려면 자소서를 어떤 경험부터 시작해야 할까?"></textarea>
+          <button id="send-button" type="submit">보내기</button>
+        </form>
+        <p class="notice">응답은 선택한 공고와 입력한 경험을 근거로 생성됩니다.</p>
+      </section>
+    </section>
+  </main>
+  <script src="./coach.js"></script>
+</body>
+</html>

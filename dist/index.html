@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="지원 공고와 답변 데이터를 바탕으로 연습하는 Next Step 면접 코치" />
+    <title>Next Step · 면접 연습</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./overlay.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-left">
+          <a class="brand" href="./next-step.html#landing" aria-label="Next Step 시작 화면으로 이동">
+            <span class="brand-mark">N</span><span>Next Step</span>
+          </a>
+          <a class="session-id back-link" href="./next-step.html#coach">AI 코치로 돌아가기</a>
+        </div>
+        <div class="topbar-meta">
+          <span class="privacy-note">둘러보기 기록은 현재 브라우저에 저장돼요</span>
+        </div>
+      </header>
+
+      <main>
+        <section id="practice-view" class="practice-layout" aria-labelledby="practice-title">
+          <aside class="brief-panel">
+            <h1 id="practice-title">면접 연습</h1>
+            <p class="practice-job" id="practice-job">선택한 공고 정보를 불러오는 중이에요.</p>
+
+            <label class="field-label" for="role-select">지원 직무</label>
+            <div class="select-wrap">
+              <select id="role-select">
+                <option value="data">데이터 분석가</option>
+                <option value="pm">서비스 기획 · PM</option>
+                <option value="marketing">퍼포먼스 마케터</option>
+              </select>
+            </div>
+
+          <div class="signal-card">
+              <div>
+                <p>질문 핵심</p>
+                <strong id="signal-title">문제 정의 · 분석 과정 · 사업적 영향</strong>
+              </div>
+            </div>
+
+            <div class="evidence-block">
+              <p class="field-label">평가 근거</p>
+              <ul id="rubric-list">
+                <li><span>01</span> 문제와 목표를 구분해 설명했는가</li>
+                <li><span>02</span> 본인의 판단과 행동이 드러나는가</li>
+                <li><span>03</span> 결과를 수치나 변화로 입증했는가</li>
+              </ul>
+            </div>
+
+            <div class="boundary-note">
+              <span aria-hidden="true">◇</span>
+              <p>첫 전사 시 모델을 내려받을 수 있습니다.</p>
+            </div>
+          </aside>
+
+          <section class="stage-panel">
+            <div class="question-row">
+              <div>
+                <span class="question-count"><b id="question-number">1</b> / 3</span>
+                <h2 id="question-text">면접 시작을 누르면 질문이 공개됩니다.</h2>
+              </div>
+              <button id="next-question" class="icon-button" type="button" aria-label="다음 질문">다음 질문</button>
+            </div>
+
+            <div class="camera-frame" id="camera-frame">
+              <video id="camera" autoplay muted playsinline></video>
+              <div id="camera-placeholder" class="camera-placeholder">
+                <div class="lens" aria-hidden="true"><span></span></div>
+                <p>카메라와 마이크를 연결한 뒤<br />면접을 시작해 주세요.</p>
+                <button id="enable-camera" class="secondary-button" type="button">카메라 연결</button>
+              </div>
+              <div class="frame-guide" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              <div class="recording-badge" id="recording-badge"><span></span> REC</div>
+              <div class="timer" id="timer">00:00</div>
+              <aside id="recording-checklist" class="recording-checklist" hidden>
+                <h3>녹화 전 확인</h3>
+                <ul>
+                  <li>상반신과 양쪽 어깨가 화면에 보이나요?</li>
+                  <li>다른 사람이 화면에 나오지 않는 환경인가요?</li>
+                  <li>얼굴이 밝고, 카메라가 눈높이에 있나요?</li>
+                  <li>주변 소음과 알림을 줄였나요?</li>
+                </ul>
+              </aside>
+              <div class="live-caption" id="live-caption" aria-live="polite"></div>
+            </div>
+
+            <div class="control-dock">
+              <div class="device-state"><span id="device-dot"></span><b id="device-label">장치 연결 전</b></div>
+              <button id="start-interview-button" class="secondary-button" type="button" disabled>면접 시작</button>
+              <button id="record-button" class="record-button" type="button" disabled>
+                <span class="record-icon"></span>
+                <span id="record-label">답변 녹화 시작</span>
+              </button>
+              <button id="finish-button" class="finish-button" type="button" disabled>분석 보기</button>
+            </div>
+          </section>
+        </section>
+
+        <section id="result-view" class="result-view" hidden aria-labelledby="result-title">
+          <div class="result-heading">
+            <div>
+              <span class="eyebrow">ANSWER REVIEW</span>
+              <h1 id="result-title">좋았던 근거는 남기고,<br />다음 답변은 더 선명하게.</h1>
+            </div>
+            <button id="retry-button" class="secondary-button" type="button">다시 연습하기</button>
+          </div>
+          <p id="job-context-status" class="job-context-status">선택한 공고의 평가 기준을 확인하고 있어요.</p>
+
+          <div class="result-grid">
+            <section class="score-card">
+              <div class="score-top"><span>답변 완성도</span><b id="total-score">—</b></div>
+              <div class="score-track"><i id="score-fill"></i></div>
+              <p>답변 근거의 명확성 지표입니다.</p>
+            </section>
+
+            <section class="metrics-card" aria-label="전달 지표">
+              <article><span>말하기 속도</span><b id="pace-value">—</b><small id="pace-note">분석 대기</small></article>
+              <article><span>긴 침묵</span><b id="pause-value">—</b><small>1.5초 이상</small></article>
+              <article><span>습관어</span><b id="filler-value">—</b><small>음, 어, 약간 등</small></article>
+              <article><span>목소리 변화</span><b id="voice-value">—</b><small id="voice-note">분석 대기</small></article>
+            </section>
+
+            <section id="recording-card" class="recording-card" hidden>
+              <div class="card-heading">
+                <div><h2>녹화 다시 보기</h2></div>
+                <button id="overlay-toggle" type="button" disabled>랜드마크 표시</button>
+              </div>
+              <div class="recording-review-layout">
+                <div id="playback-wrap" class="playback-wrap">
+                  <video id="recording-playback" controls playsinline></video>
+                  <canvas id="landmark-overlay" hidden aria-label="MediaPipe 랜드마크 오버레이"></canvas>
+                </div>
+                <aside class="video-analysis-panel">
+                  <div class="video-feedback-heading"><h3>영상 전달 피드백</h3><span id="vision-status" class="source-badge"></span></div>
+                  <div id="video-live-indicators" class="video-live-indicators"></div>
+                  <div id="video-feedback-list" class="feedback-list"></div>
+                </aside>
+              </div>
+              <p class="card-intro">녹화본은 이 브라우저에만 임시 보관됩니다.</p>
+            </section>
+
+            <section class="transcript-card">
+              <div class="card-heading">
+                <div><h2>내 답변</h2></div>
+                <span id="transcript-source" class="source-badge">직접 입력</span>
+              </div>
+              <label class="sr-only" for="transcript-input">답변 텍스트</label>
+              <textarea id="transcript-input" placeholder="전사가 실패했거나 수정이 필요하면 여기에 답변을 붙여 넣으세요."></textarea>
+              <button id="reanalyze-button" class="text-button" type="button">텍스트 다시 분석</button>
+            </section>
+
+            <section class="feedback-card">
+              <div class="card-heading"><div><h2>피드백</h2></div></div>
+              <div id="feedback-list" class="feedback-list"></div>
+              <button id="agent-feedback-button" class="text-button" type="button">AI 코치 피드백 받기</button>
+              <p id="agent-feedback-status" class="agent-feedback-status" aria-live="polite"></p>
+            </section>
+
+            <section class="rubric-card">
+              <div class="card-heading">
+                <div><h2>항목별 근거</h2></div>
+                <span class="source-badge">기준 기반 분석</span>
+              </div>
+              <p class="card-intro">연결된 공고 기준과 답변 내용을 바탕으로 분석합니다.</p>
+              <div id="rubric-map" class="rubric-map"></div>
+            </section>
+
+            <section id="followup-card" class="followup-card">
+              <div class="card-heading"><div><h2>꼬리질문</h2></div><span id="followup-status" class="source-badge">답변 대기</span></div>
+              <p id="followup-context" class="followup-context"></p>
+              <label class="sr-only" for="followup-input">꼬리질문 답변</label>
+              <textarea id="followup-input" class="followup-input" placeholder="꼬리질문에 답하면 최초 답변과 함께 다시 평가합니다."></textarea>
+              <button id="submit-followup" class="followup-button" type="button">후속 답변 반영하기</button>
+            </section>
+          </div>
+
+          <div class="expert-boundary"><p>AI 연결 전에는 브라우저의 기준 기반 분석으로 결과를 미리 확인할 수 있습니다.</p></div>
+        </section>
+      </main>
+    </div>
+    <script src="./job-context-api.js"></script>
+    <script src="./agent-api.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

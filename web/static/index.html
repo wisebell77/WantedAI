@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overlap — 직무 추천 확인용</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --line:#252a34; --fg:#e6e8ec; --dim:#9aa3b2;
+  --accent:#6ea8fe; --warm:#ffb454; --good:#7ee787;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+     font:15px/1.6 -apple-system,"Segoe UI","Noto Sans KR",sans-serif}
+header{padding:20px 28px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:18px;letter-spacing:-.2px}
+h1 small{color:var(--dim);font-weight:400;font-size:13px;margin-left:10px}
+main{display:grid;grid-template-columns:400px 1fr;gap:0;align-items:start}
+#left{padding:24px 28px;border-right:1px solid var(--line);
+      position:sticky;top:0;max-height:100vh;overflow:auto}
+#right{padding:24px 28px;min-width:0}
+label{display:block;font-size:13px;color:var(--dim);margin:16px 0 6px}
+textarea,select{width:100%;background:#0c0e13;color:var(--fg);
+  border:1px solid var(--line);border-radius:8px;padding:11px;font:inherit}
+textarea{min-height:150px;resize:vertical}
+button{background:var(--accent);color:#0b1020;border:0;border-radius:8px;
+  padding:10px 16px;font:600 14px/1 inherit;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line);
+  padding:6px 11px;font-weight:400;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:18px 20px;margin-bottom:16px}
+.card h3{margin:0 0 4px;font-size:16px}
+.meta{color:var(--dim);font-size:13px}
+.comp{border-left:2px solid var(--line);padding:2px 0 2px 14px;margin:14px 0}
+.comp .name{font-weight:600}
+.comp .need{color:var(--dim);font-size:12px;margin-left:6px;font-weight:400}
+.ev{font-size:13.5px;margin-top:5px;display:flex;gap:8px}
+.ev .tag{color:var(--dim);flex:0 0 68px;font-size:12px;padding-top:1px}
+.ev.mine .txt{color:var(--good)}
+.ev.job  .txt{color:var(--warm)}
+.src{color:var(--dim);font-size:12px;margin-left:76px}
+.src a{color:var(--dim)}
+.sec{font-size:12px;color:var(--dim);letter-spacing:.06em;
+  text-transform:uppercase;margin:22px 0 8px}
+.post{font-size:13.5px;padding:9px 0;border-top:1px solid var(--line)}
+.post .why{color:var(--dim);font-size:12px}
+.pill{display:inline-block;background:#1e2430;color:var(--dim);border-radius:20px;
+  padding:3px 10px;margin:3px 5px 0 0;font-size:12px}
+.does{background:#12161d;border-left:2px solid var(--accent);border-radius:0 6px 6px 0;
+  padding:8px 12px;margin:10px 0;font-size:13px;color:#c4cbd6}
+.does b{color:var(--accent);font-weight:600;margin-right:6px}
+.does.sm{font-size:12.5px;margin:5px 0 0;border-left-color:var(--line)}
+.sub{padding:9px 0;border-top:1px solid var(--line)}
+.gap{padding:10px 0;border-top:1px solid var(--line)}
+.gap .k{display:inline-block;border-radius:4px;padding:2px 7px;margin-right:8px;
+  font-size:11px;font-weight:600;vertical-align:1px}
+.k.near{background:#1c3326;color:var(--good)}
+.k.core{background:#33291a;color:var(--warm)}
+.k.broad{background:#1e2738;color:var(--accent)}
+.gap .why{margin-top:4px}
+.sub.top b{color:var(--good)}
+/* 모드 토글 — 정방향/역방향은 성격이 달라서 한 목록에 섞으면 안 된다 */
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:transparent;color:var(--dim);border:0;
+  padding:9px 0;font:500 13.5px/1 inherit;border-radius:0}
+.seg button.on{background:var(--accent);color:#0b1020;font-weight:600}
+/* 검색형 선택창 — 122개를 스크롤로 찾는 건 무리다 */
+.combo{position:relative}
+.combo ul{position:absolute;z-index:20;left:0;right:0;top:100%;margin:4px 0 0;
+  padding:4px;list-style:none;max-height:260px;overflow:auto;display:none;
+  background:#0b0d12;border:1px solid #39414f;border-radius:8px;
+  box-shadow:0 8px 28px rgba(0,0,0,.55)}
+.combo ul.open{display:block}
+.combo li{padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13.5px}
+.combo li:hover,.combo li.sel{background:#1b2130}
+.combo li .lv{color:var(--dim);font-size:11.5px;margin-left:6px}
+.combo li .pa{color:var(--dim)}
+.combo .none{color:var(--dim);padding:10px;font-size:13px}
+#tip{position:fixed;z-index:99;max-width:420px;display:none;
+  background:#0b0d12;border:1px solid #39414f;border-radius:8px;
+  padding:11px 13px;font-size:12.5px;line-height:1.55;color:#d7dce4;
+  box-shadow:0 8px 28px rgba(0,0,0,.55)}
+#tip b{color:var(--accent);display:block;margin-bottom:6px;font-size:12px}
+#tip .u{margin:5px 0}
+#tip .u i{color:#e6e8ec;font-style:normal;font-weight:600}
+#tip .u span{color:#9aa3b2;display:block;margin-top:1px}
+.tip{border-bottom:1px dotted var(--dim);cursor:help}
+.note{background:#1a1510;border:1px solid #3a2c18;color:#e8d5b5;
+  border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:16px}
+.empty{color:var(--dim);padding:40px 0;text-align:center}
+.spin{color:var(--dim);padding:40px 0;text-align:center}
+@media(max-width:900px){main{grid-template-columns:1fr}
+  #left{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Overlap <small>직무 추천 — 로컬 확인용</small></h1>
+</header>
+<main>
+  <div id="left">
+    <label>경험 원문 — 한 줄에 하나씩, 편하게 써도 됩니다</label>
+    <textarea id="text" placeholder="예) 학회 운영진으로 8명 일정을 조율했다"></textarea>
+    <div class="row" id="presets"></div>
+    <div class="row">
+      <button class="ghost" id="tidy">문장으로 정리</button>
+      <span class="meta" id="llmState"></span>
+    </div>
+
+    <label>모드</label>
+    <div class="seg">
+      <button id="mRev" class="on">역방향 — 겹치는 직무 찾기</button>
+      <button id="mFwd">정방향 — 목표와의 격차</button>
+    </div>
+
+    <div id="pick" hidden>
+      <label>목표 직무 — 이름을 입력해 좁힐 수 있습니다</label>
+      <div class="combo">
+        <input id="q" autocomplete="off" placeholder="예) 정보기술  ·  빅데이터">
+        <ul id="list"></ul>
+      </div>
+      <p class="meta" id="picked" style="margin:8px 0 0"></p>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <button id="run">대조하기</button>
+    </div>
+    <p class="meta" id="hint" style="margin-top:14px"></p>
+  </div>
+
+  <div id="right"><div class="empty">왼쪽에 경험을 넣고 <b>대조하기</b>를 눌러 보세요.</div></div>
+</main>
+<div id="tip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s ?? "").replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let JOBS = [];
+
+let MODE = "rev", TARGET = "";
+
+function setMode(m){
+  MODE = m;
+  $("#mRev").classList.toggle("on", m === "rev");
+  $("#mFwd").classList.toggle("on", m === "fwd");
+  $("#pick").hidden = m !== "fwd";
+}
+$("#mRev").onclick = () => setMode("rev");
+$("#mFwd").onclick = () => setMode("fwd");
+
+// 122개를 스크롤로 찾는 건 무리다. 입력할 때마다 목록을 좁힌다.
+function renderList(term){
+  const ul = $("#list");
+  const t = (term || "").trim().toLowerCase();
+  const hit = JOBS.filter(j => !t || j.label.toLowerCase().includes(t)).slice(0, 60);
+  ul.innerHTML = hit.length ? hit.map(j => {
+    const [pa, nm] = j.parent ? [j.parent + " › ", j.name] : ["", j.name];
+    return `<li data-code="${j.code}" data-label="${esc(j.label)}">` +
+      `<span class="pa">${esc(pa)}</span>${esc(nm)}` +
+      `<span class="lv">${j.level} · 공고 ${j.units}건</span></li>`;
+  }).join("") : `<div class="none">일치하는 직무가 없습니다</div>`;
+  ul.classList.add("open");
+}
+
+function bindCombo(){
+  const q = $("#q"), ul = $("#list");
+  q.oninput = () => { TARGET = ""; $("#picked").textContent = ""; renderList(q.value); };
+  q.onfocus = () => renderList(q.value);
+  ul.onclick = e => {
+    const li = e.target.closest("li");
+    if (!li) return;
+    TARGET = li.dataset.code;
+    q.value = li.dataset.label;
+    $("#picked").textContent = `선택됨 — ${li.dataset.label}`;
+    ul.classList.remove("open");
+  };
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".combo")) ul.classList.remove("open");
+  });
+}
+
+async function boot(){
+  const d = await (await fetch("/api/jobs")).json();
+  JOBS = d.jobs;
+  bindCombo();
+  $("#presets").innerHTML = Object.keys(d.presets).map(k =>
+    `<button class="ghost" data-p="${esc(k)}">${esc(k)}</button>`).join("");
+  $("#presets").onclick = e => {
+    const k = e.target.dataset.p;
+    if (k) $("#text").value = d.presets[k];
+  };
+  $("#llmState").textContent = d.llm
+    ? "Upstage 사용" : "규칙 분리 (UPSTAGE_API_KEY 없음)";
+  const n소 = JOBS.filter(j => j.level === "소분류").length;
+  $("#hint").innerHTML =
+    `직무 ${n소}개(세분류 포함 ${JOBS.length}개) · 공공기관 채용공고에서 만든 역량 축과 대조합니다.<br>` +
+    `퍼센트를 쓰지 않습니다 — 겹치는 <b>개수</b>와 <b>근거 문장</b>만 보여 줍니다.`;
+}
+
+$("#tidy").onclick = async () => {
+  const t = $("#text").value.trim();
+  if (!t) return;
+  $("#tidy").disabled = true;
+  try {
+    const d = await (await fetch("/api/tidy", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({text:t})})).json();
+    if (d.sentences?.length) $("#text").value = d.sentences.join("\n");
+    $("#llmState").textContent = d.source === "llm" ? "Upstage 로 정리함" : "규칙으로 정리함";
+  } finally { $("#tidy").disabled = false; }
+};
+
+$("#run").onclick = async () => {
+  const texts = $("#text").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!texts.length) return;
+  if (MODE === "fwd" && !TARGET) {
+    $("#picked").textContent = "목록에서 목표 직무를 골라 주세요";
+    return;
+  }
+  $("#run").disabled = true;
+  $("#right").innerHTML = `<div class="spin">대조하는 중…</div>`;
+  try {
+    const d = await (await fetch("/api/recommend", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({texts, target: MODE === "fwd" ? TARGET : ""})})).json();
+    render(d);
+  } catch (e) {
+    $("#right").innerHTML = `<div class="empty">요청 실패: ${esc(e.message)}</div>`;
+  } finally { $("#run").disabled = false; }
+};
+
+// 마우스를 올리면 뜨는 작은 창. 능력단위 이름과 공식 정의를 보여 준다.
+// 카드에 다 펼치면 화면이 길어지고, 안 보여 주면 이름만으로는 안 와닿는다.
+const TIPS = new Map();
+let tipId = 0;
+
+function tipFor(title, abilities){
+  if (!abilities?.length) return "";
+  const id = "t" + (++tipId);
+  TIPS.set(id, `<b>${esc(title)} — 능력단위 ${abilities.length}개</b>` +
+    abilities.map(a => `<div class="u"><i>${esc(a.name)}</i>` +
+      (a.def ? `<span>${esc(a.def)}</span>` : "") + `</div>`).join(""));
+  return id;
+}
+
+(function(){
+  const tip = $("#tip");
+  document.addEventListener("mouseover", e => {
+    const el = e.target.closest("[data-tip]");
+    if (!el) return;
+    const html = TIPS.get(el.dataset.tip);
+    if (!html) return;
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    place(e);
+  });
+  document.addEventListener("mousemove", e => {
+    if (tip.style.display === "block" && e.target.closest("[data-tip]")) place(e);
+  });
+  document.addEventListener("mouseout", e => {
+    if (e.target.closest("[data-tip]") &&
+        !e.relatedTarget?.closest("[data-tip]")) tip.style.display = "none";
+  });
+  function place(e){
+    const r = tip.getBoundingClientRect();
+    // 화면 밖으로 나가면 반대쪽에 붙인다
+    const x = Math.min(e.clientX + 14, innerWidth - r.width - 12);
+    const y = e.clientY + r.height + 20 > innerHeight
+      ? Math.max(e.clientY - r.height - 12, 8) : e.clientY + 16;
+    tip.style.left = Math.max(x, 8) + "px";
+    tip.style.top = y + "px";
+  }
+})();
+
+function evidence(e, mine=true){
+  const q = e.quotes?.[0];
+  return `<div class="comp">
+    <div><span class="name">${esc(e.competency)}</span>
+      <span class="need">공고 ${e.postings}건에서 요구${e.extension ? " · 확장 노드" : ""}</span></div>
+    ${mine && e.sentence ? `<div class="ev mine"><span class="tag">당신의 경험</span>
+      <span class="txt">${esc(e.sentence)}</span></div>` : ""}
+    ${q ? `<div class="ev job"><span class="tag">공고 원문</span>
+      <span class="txt">${esc(q.text)}</span></div>
+      ${q.source ? `<div class="src">${q.url
+        ? `<a href="${esc(q.url)}" target="_blank" rel="noopener">${esc(q.source)}</a>`
+        : esc(q.source)}</div>` : ""}` : ""}
+  </div>`;
+}
+
+// '외 n개' 에 마우스를 올리면 나머지가 보이게 한다.
+function does(o){
+  const id = tipFor(o.name, o.abilities);
+  return esc(o.description).replace(/외 (\d+)개$/,
+    (_, n) => `<span class="tip" data-tip="${id}">외 ${n}개</span>`);
+}
+
+function matchCard(m, isTarget=false){
+  return `<div class="card">
+    <h3>${esc(m.name)}</h3>
+    <div class="meta">${esc(m.sentence)}</div>
+    ${m.description ? `<div class="does"><b>하는 일</b>${does(m)}</div>` : ""}
+    ${m.subdivisions?.length ? `<div class="sec">이 안에서는 어느 쪽인가</div>
+      ${m.subdivisions.map((s, i) => `<div class="sub${i === 0 ? " top" : ""}">
+        <div><b class="tip" data-tip="${tipFor(s.name, s.abilities)}">${esc(s.name)}</b>
+          <span class="need">겹치는 역량 ${s.overlap}개 · 이 세분류 공고 ${s.units}건</span></div>
+        ${s.description ? `<div class="does sm">${does(s)}</div>` : ""}
+      </div>`).join("")}
+      <div class="why" style="margin-top:6px">
+        표본이 작아 순위 자체를 근거로 쓰기는 어렵습니다. 방향만 참고하세요.</div>` : ""}
+    ${m.have.length ? `<div class="sec">겹치는 역량</div>
+      ${m.have.slice(0,6).map(e => evidence(e, true)).join("")}` : ""}
+    ${isTarget && m.gaps?.length ? `<div class="sec">채우면 좋은 역량</div>
+      <div class="meta" style="margin-bottom:6px">
+        무엇을 하라고 조언하지 않습니다. 공고 데이터가 아는 사실만 보여 줍니다.</div>
+      ${m.gaps.map(g => `<div class="gap">
+        <span class="k ${g.kind}">${{near:"거의 닿음",core:"이 직무 필수",
+          broad:"여러 직무 공통"}[g.kind]}</span><b>${esc(g.competency)}</b>
+        <div class="why">${esc(g.sentence.replace(g.competency + " — ", ""))}</div>
+        ${g.kind === "near" && g.near ? `<div class="ev mine"><span class="tag">당신의 문장</span>
+          <span class="txt">${esc(g.near)}</span></div>` : ""}
+        ${g.quote ? `<div class="ev job"><span class="tag">공고 원문</span>
+          <span class="txt">${esc(g.quote)}</span></div>` : ""}
+      </div>`).join("")}` : ""}
+    ${isTarget && m.lack.length ? `<div class="sec">그 밖에 겹치지 않는 역량</div>
+      ${m.lack.slice(0,5).map(e => evidence(e, false)).join("")}` : ""}
+    ${m.postings.length ? `<div class="sec">이 직무를 이렇게 정의한 공고</div>
+      ${m.postings.map(p => `<div class="post">
+        ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.label)}</a>`
+                : esc(p.label)}
+        <div class="why">당신과 겹치는 역량 ${p.competencies.length}개 — ${
+          p.competencies.map(esc).join(" · ")}</div></div>`).join("")}
+      <div class="why" style="margin-top:10px;color:var(--dim);font-size:12px">
+        2022~2025년 공공기관 채용공시입니다. 대부분 마감됐고, 지금 지원 가능한
+        공고가 아니라 <b>이 직무가 무엇을 요구하는지의 근거</b>입니다.</div>` : ""}
+  </div>`;
+}
+
+function render(d){
+  if (d.error) { $("#right").innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+  let h = "";
+  if (d.mode === "forward") {
+    h += `<div class="sec">정방향 — 목표 직무와의 격차</div>` + matchCard(d.target, true);
+    if (d.matches.length) {
+      h += `<div class="sec">같은 경험으로 본 다른 직무</div>`;
+      h += d.matches.map(m => `<div class="card"><h3>${esc(m.name)}</h3>
+        <div class="meta">${esc(m.sentence)}</div></div>`).join("");
+    }
+  } else {
+    h += `<div class="sec">역방향 — 겹침이 많은 직무</div>`;
+    h += d.matches.length ? d.matches.map(m => matchCard(m)).join("")
+      : `<div class="empty">근거가 충분한 직무가 없습니다. 경험을 더 넣어 보세요.</div>`;
+  }
+  if (d.market?.length) {
+    h += `<div class="sec">민간 축 — 공공 직무기술서에 없지만 시장이 요구하는 것</div>
+      <div class="card"><div class="meta" style="margin-bottom:10px">
+      민간 공고는 본문을 인용하지 않고 출처만 표시합니다.</div>` +
+      d.market.map(s => `<div class="post">${esc(s.sentence)}
+        <div class="why">${s.examples.map(e =>
+          esc(e.corp + (e.role ? " — " + e.role : ""))).join(" · ")}</div></div>`).join("") +
+      `</div>`;
+  }
+  h += `<div class="sec">엔진이 읽은 것</div><div class="card">
+    <div class="meta">문장 ${d.sentences.length}개 → 역량 노드 ${d.nodes.length}개</div>
+    <div style="margin-top:8px">${d.nodes.map(n => `<span class="pill">${esc(n)}</span>`).join("")}</div>
+    ${d.unmatched.length ? `<div class="note" style="margin-top:14px">
+      <b>못 읽은 문장 ${d.unmatched.length}개</b> — 가장 가까운 역량도 충분히 가깝지
+      않아 버렸습니다. 억지로 붙이면 말이 안 되는 근거가 됩니다.
+      반복해서 쌓이면 확장 노드 후보가 됩니다.
+      ${d.unmatched.slice(0,4).map(u =>
+        `<div style="margin-top:6px">최고 유사도 ${u.best} — ${esc(u.text)}</div>`
+      ).join("")}</div>` : ""}
+  </div>`;
+  $("#right").innerHTML = h;
+}
+
+boot();
+</script>
+</body>
+</html>
