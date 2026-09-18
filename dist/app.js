@@ -44,12 +44,14 @@ const roleData = {
 };
 
 const $ = (id) => document.getElementById(id);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 const state = {
   stream: null, recorder: null, chunks: [], recording: false, startedAt: 0, timerId: null,
   transcript: "", audioContext: null, analyser: null, recordedBlob: null, recordingUrl: null, transcribing: false,
   audioSamples: [], silenceRuns: [], silenceStartedAt: null, sampleId: null, question: 0, duration: 1, followupText: "", jobContext: null, interviewPersona: null,
   preparing: false, preparationTimer: null, preparationEndsAt: 0, questionRevealed: false,
-  vision: null, visionStatus: "대기", visionSampleId: null, visionLastAt: 0, visual: null, overlayVisible: false, overlayFrame: null, overlayLastTime: -1
+  visionStatus: "서버 분석 대기", visual: null, overlayVisible: false, overlayFrame: null, overlayLastTime: -1,
+  mode: "video", personaEvaluation: null
 };
 
 // postingId comes from the query string when the real project serves
@@ -113,7 +115,6 @@ async function enableCamera() {
     $("device-label").textContent = "카메라 · 마이크 연결됨";
     $("device-label").parentElement.classList.add("connected");
     setupAudioMeter();
-    setupVision();
   } catch (error) {
     $("camera-placeholder").querySelector("p").textContent = "권한을 확인할 수 없습니다. 브라우저 주소창에서 카메라와 마이크를 허용해 주세요.";
   }
@@ -127,24 +128,31 @@ function setupAudioMeter() {
   source.connect(state.analyser);
 }
 
-async function transcribeWithFasterWhisper(blob) {
+async function processRecordedInterview(blob) {
   try {
     const postingId = state.jobContext?.postingId || currentPostingId();
-    const response = await fetch(`/api/v1/interview/transcribe?postingId=${encodeURIComponent(postingId)}`, { method: "POST", headers: { "Content-Type": blob.type || "video/webm" }, body: blob });
+    const questions = state.interviewPersona?.questions || [];
+    const currentQuestion = questions[state.question % Math.max(1, questions.length)];
+    const params = new URLSearchParams({ postingId, question: currentQuestion?.question || $("question-text").textContent, itemId: currentQuestion?.item_id || "" });
+    const response = await fetch(`/api/v1/interview/process?${params}`, { method: "POST", headers: { "Content-Type": blob.type || "video/webm" }, body: blob });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "TRANSCRIPTION_FAILED");
-    state.transcript = result.text.trim();
+    if (!response.ok) throw new Error(result.error || "INTERVIEW_PROCESS_FAILED");
+    state.transcript = result.transcription?.text?.trim() || "";
+    state.visual = result.videoAnalysis || null;
+    state.personaEvaluation = result.personaEvaluation || null;
+    state.visionStatus = state.visual ? `서버 분석 완료 · ${state.visual.sampleFps || 0}fps` : "영상 분석 결과 없음";
     state.transcribing = false;
     $("record-label").textContent = "한 번 더 녹화";
     $("record-button").disabled = false;
     $("finish-button").disabled = false;
-    $("live-caption").textContent = state.transcript ? "faster-whisper medium 전사가 완료됐습니다." : "전사된 텍스트가 없습니다. 직접 입력할 수 있어요.";
+    $("live-caption").textContent = state.transcript ? "서버 전사·영상 분석이 완료됐습니다." : "전사된 텍스트가 없습니다. 직접 입력할 수 있어요.";
   } catch (error) {
     state.transcribing = false;
     $("record-label").textContent = "한 번 더 녹화";
     $("record-button").disabled = false;
     $("finish-button").disabled = false;
-    $("live-caption").textContent = "faster-whisper 전사에 실패했습니다. 직접 입력할 수 있어요.";
+    state.visionStatus = `서버 분석 실패: ${error.message}`;
+    $("live-caption").textContent = `면접 분석 실패: ${error.message}. 직접 입력해 평가할 수 있어요.`;
     console.error(error);
   }
 }
@@ -168,118 +176,18 @@ function startSampling() {
   }, 120);
 }
 
-async function setupVision() {
-  if (state.vision) return;
-  state.visionStatus = "모델 불러오는 중";
-  try {
-    const { FilesetResolver, FaceLandmarker, HandLandmarker, GestureRecognizer, PoseLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/+esm");
-    const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm");
-    const baseOptions = (modelAssetPath) => ({ modelAssetPath });
-    state.vision = {
-      face: await FaceLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"), runningMode: "VIDEO", outputFaceBlendshapes: true }),
-      hand: await HandLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"), runningMode: "VIDEO", numHands: 2 }),
-      gesture: await GestureRecognizer.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task"), runningMode: "VIDEO", numHands: 2 }),
-      pose: await PoseLandmarker.createFromOptions(files, { baseOptions: baseOptions("https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"), runningMode: "VIDEO", numPoses: 1 }),
-      faceConnections: FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-      poseConnections: PoseLandmarker.POSE_CONNECTIONS
-    };
-    state.visionStatus = "분석 완료 · 최대 10fps";
-    if (state.recording) startVisionSampling();
-  } catch (error) {
-    state.visionStatus = "모델 로딩 실패";
-    console.warn("MediaPipe를 불러오지 못했습니다.", error);
-  }
-}
-
-function emptyVisual() {
-  return { frames: 0, faceMissing: 0, offCenter: 0, handsVisible: 0, gestures: {}, poseMissing: 0, shouldersOffCenter: 0, shoulderTiltFrames: 0, armMoves: 0, lastWristCenter: null, lastArmMoveAt: 0, samples: [], blinks: 0, eyeFrames: 0, eyesClosed: false, mouthFrames: 0, mouthFrownFrames: 0, upperBodyMoves: 0, lastShoulderCenter: null, lastUpperBodyMoveAt: 0 };
-}
-
-function startVisionSampling() {
-  state.visual ||= emptyVisual();
-  if (!state.vision || state.visionSampleId) return;
-  state.visionLastAt = 0;
-  const sample = (now) => {
-    if (!state.recording) { state.visionSampleId = null; return; }
-    if (now - state.visionLastAt >= 100 && state.stream && $("camera").readyState >= 2) {
-      state.visionLastAt = now;
-      collectVisionFrame(now);
-    }
-    state.visionSampleId = requestAnimationFrame(sample);
-  };
-  state.visionSampleId = requestAnimationFrame(sample);
-}
-
-function collectVisionFrame(now) {
-  const visual = state.visual;
-  visual.frames += 1;
-  const face = state.vision.face.detectForVideo($("camera"), now);
-  const hand = state.vision.hand.detectForVideo($("camera"), now);
-  const gesture = state.vision.gesture.recognizeForVideo($("camera"), now);
-  const pose = state.vision.pose.detectForVideo($("camera"), now);
-  const landmarks = face.faceLandmarks?.[0];
-  if (!landmarks) visual.faceMissing += 1;
-  else {
-    if (Math.abs((landmarks[1]?.x ?? .5) - .5) > .22) visual.offCenter += 1;
-    const eyeRatio = (eye) => (Math.hypot(landmarks[eye[1]].x - landmarks[eye[5]].x, landmarks[eye[1]].y - landmarks[eye[5]].y) + Math.hypot(landmarks[eye[2]].x - landmarks[eye[4]].x, landmarks[eye[2]].y - landmarks[eye[4]].y)) / (2 * Math.hypot(landmarks[eye[0]].x - landmarks[eye[3]].x, landmarks[eye[0]].y - landmarks[eye[3]].y));
-    const openness = (eyeRatio([33, 160, 158, 133, 153, 144]) + eyeRatio([362, 385, 387, 263, 373, 380])) / 2;
-    visual.eyeFrames += 1;
-    if (openness < .19) visual.eyesClosed = true;
-    if (openness > .22 && visual.eyesClosed) { visual.blinks += 1; visual.eyesClosed = false; }
-    const frown = face.faceBlendshapes?.[0]?.categories?.filter((item) => item.categoryName.startsWith("mouthFrown")).reduce((highest, item) => Math.max(highest, item.score), 0) || 0;
-    visual.mouthFrames += 1;
-    if (frown > .2) visual.mouthFrownFrames += 1;
-  }
-  if (hand.handLandmarks?.length) visual.handsVisible += 1;
-  const poseLandmarks = pose.landmarks?.[0];
-  if (!poseLandmarks) visual.poseMissing += 1;
-  else {
-    const shoulderCenter = ((poseLandmarks[11]?.x ?? .5) + (poseLandmarks[12]?.x ?? .5)) / 2;
-    if (Math.abs(shoulderCenter - .5) > .22) visual.shouldersOffCenter += 1;
-    const shoulderPoint = [shoulderCenter, ((poseLandmarks[11]?.y ?? .5) + (poseLandmarks[12]?.y ?? .5)) / 2];
-    const moved = visual.lastShoulderCenter && Math.hypot(shoulderPoint[0] - visual.lastShoulderCenter[0], shoulderPoint[1] - visual.lastShoulderCenter[1]) > .035;
-    if (moved && now - visual.lastUpperBodyMoveAt > 700) { visual.upperBodyMoves += 1; visual.lastUpperBodyMoveAt = now; }
-    visual.lastShoulderCenter = shoulderPoint;
-    if (Math.abs((poseLandmarks[11]?.y ?? .5) - (poseLandmarks[12]?.y ?? .5)) > .055) visual.shoulderTiltFrames += 1;
-    const wristCenter = [((poseLandmarks[15]?.x ?? .5) + (poseLandmarks[16]?.x ?? .5)) / 2, ((poseLandmarks[15]?.y ?? .5) + (poseLandmarks[16]?.y ?? .5)) / 2];
-    const armsMoved = visual.lastWristCenter && Math.hypot(wristCenter[0] - visual.lastWristCenter[0], wristCenter[1] - visual.lastWristCenter[1]) > .05;
-    if (armsMoved && now - visual.lastArmMoveAt > 500) { visual.armMoves += 1; visual.lastArmMoveAt = now; }
-    visual.lastWristCenter = wristCenter;
-  }
-  gesture.gestures?.forEach((items) => {
-    const name = items[0]?.categoryName;
-    if (name && name !== "None") visual.gestures[name] = (visual.gestures[name] || 0) + 1;
-  });
-  visual.samples.push({
-    time: (Date.now() - state.startedAt) / 1000,
-    face: landmarks?.map(({ x, y, z }) => [x, y, z]),
-    hands: hand.handLandmarks?.map((points) => points.map(({ x, y }) => [x, y])),
-    pose: poseLandmarks?.map(({ x, y }) => [x, y]),
-    faceCentered: Boolean(landmarks) && Math.abs((landmarks[1]?.x ?? .5) - .5) <= .22,
-    handCount: hand.handLandmarks?.length || 0,
-    shoulderTilt: Boolean(poseLandmarks) && Math.abs((poseLandmarks[11]?.y ?? .5) - (poseLandmarks[12]?.y ?? .5)) > .055,
-    blinks: visual.blinks,
-    blinkRate: Math.round((visual.blinks / Math.max(.1, (Date.now() - state.startedAt) / 1000)) * 60),
-    upperBodyMoves: visual.upperBodyMoves,
-    mouthFrownPercent: Math.round((visual.mouthFrownFrames / Math.max(1, visual.mouthFrames)) * 100)
-  });
-}
-
 function videoFeedback() {
   const visual = state.visual;
-  if (!visual?.frames) return [];
-  const percent = (value) => Math.round((value / visual.frames) * 100);
+  if (!visual?.framesAnalyzed) return [];
   const result = [];
-  if (visual.faceMissing) result.push(["화면 유지", `얼굴이 감지되지 않은 구간이 ${percent(visual.faceMissing)}%입니다. 해당 시점의 영상을 다시 확인해 보세요.`]);
-  if (visual.offCenter) result.push(["프레임 위치", `얼굴이 화면 중심에서 벗어난 구간이 ${percent(visual.offCenter)}%입니다.`]);
-  if (visual.poseMissing) result.push(["상체 감지", `상체가 감지되지 않은 구간이 ${percent(visual.poseMissing)}%입니다. 카메라 높이와 거리를 확인해 보세요.`]);
-  else if (visual.shouldersOffCenter) result.push(["상체 위치", `어깨 중심이 화면 중앙에서 벗어난 구간이 ${percent(visual.shouldersOffCenter)}%입니다.`]);
-  if (visual.eyeFrames) result.push(["눈 깜빡임", `랜드마크 기준으로 눈 깜빡임이 ${visual.blinks}회(${Math.round((visual.blinks / Math.max(1, state.duration)) * 60)}회/분) 감지됐습니다. 조명·안경·카메라 각도에 따라 달라질 수 있습니다.`]);
-  if (visual.mouthFrames) result.push(["입꼬리 방향", `입꼬리 아래 방향 랜드마크 신호가 ${percent(visual.mouthFrownFrames)}% 구간에서 나타났습니다. 표정의 좋고 나쁨이 아닌 녹화 확인용 신호입니다.`]);
-  if (visual.upperBodyMoves) result.push(["상체 움직임", `어깨 중심이 크게 이동한 구간이 ${visual.upperBodyMoves}회 감지됐습니다. 녹화본과 오버레이를 함께 확인해 보세요.`]);
-  if (visual.shoulderTiltFrames) result.push(["어깨 기울기", `양쪽 어깨 높이 차이가 큰 구간이 ${percent(visual.shoulderTiltFrames)}%입니다.`]);
-  if (visual.armMoves) result.push(["팔 움직임", `양쪽 손목 중심이 크게 이동한 구간이 ${visual.armMoves}회 감지됐습니다.`]);
-  result.push(["손 노출", `손이 화면에 보인 구간은 ${percent(visual.handsVisible)}%입니다.`]);
+  if (visual.faceCoverage < .9) result.push(["화면 유지", `얼굴이 감지된 비율은 ${Math.round(visual.faceCoverage * 100)}%입니다. 상반신과 얼굴이 계속 보이도록 카메라 위치를 확인해 보세요.`]);
+  if (visual.poseCoverage < .9) result.push(["상체 감지", `상체가 감지된 비율은 ${Math.round(visual.poseCoverage * 100)}%입니다. 어깨가 화면에 보이는지 확인해 보세요.`]);
+  result.push(["눈 깜빡임", `랜드마크 기준으로 ${visual.blinkCount || 0}회(${Math.round((visual.blinkCount || 0) / Math.max(1, visual.durationSeconds || state.duration) * 60)}회/분) 감지됐습니다. 조명·안경·카메라 각도에 따라 달라질 수 있습니다.`]);
+  if (visual.mouthFrownPercent) result.push(["입 주변 신호", `입꼬리 아래 방향 랜드마크 신호가 ${visual.mouthFrownPercent}% 구간에서 나타났습니다. 표정의 좋고 나쁨을 판정하는 지표는 아닙니다.`]);
+  if (visual.upperBodyMovementEvents) result.push(["상체 움직임", `어깨 중심이 크게 이동한 구간이 ${visual.upperBodyMovementEvents}회 감지됐습니다. 녹화본과 오버레이를 함께 확인해 보세요.`]);
+  if (visual.shoulderTiltPercent) result.push(["어깨 기울기", `양쪽 어깨 높이 차이가 큰 구간이 ${visual.shoulderTiltPercent}%입니다.`]);
+  if (visual.armMovementEvents) result.push(["팔 움직임", `양쪽 손목 중심이 크게 이동한 구간이 ${visual.armMovementEvents}회 감지됐습니다.`]);
+  result.push(["손 노출", `손이 화면에 보인 프레임은 ${visual.handFrames || 0}회입니다.`]);
   const gestures = Object.entries(visual.gestures).sort((a, b) => b[1] - a[1]).slice(0, 2);
   if (gestures.length) result.push(["손동작", `감지된 손동작: ${gestures.map(([name, count]) => `${name} ${count}회`).join(", ")}`]);
   return result;
@@ -311,7 +219,8 @@ function drawLines(context, points, links, color) {
 }
 
 function drawOverlayMetrics(context, sample) {
-  const lines = [`눈 깜빡임  ${sample.blinks}회 · ${sample.blinkRate}회/분`, `상체 이동  ${sample.upperBodyMoves}회`, `입꼬리 아래 방향 신호  ${sample.mouthFrownPercent}%`];
+  const visual = state.visual || {};
+  const lines = [`눈 깜빡임  ${visual.blinkCount || 0}회`, `상체 이동  ${visual.upperBodyMovementEvents || 0}회`, `입꼬리 아래 방향 신호  ${visual.mouthFrownPercent || 0}%`];
   const size = Math.max(14, Math.round(context.canvas.width / 52));
   context.fillStyle = "rgba(0, 0, 0, .68)";
   context.fillRect(16, 16, Math.min(context.canvas.width - 32, size * 20), size * 4.6);
@@ -321,12 +230,13 @@ function drawOverlayMetrics(context, sample) {
 }
 
 function renderLiveIndicators(sample) {
+  const visual = state.visual || {};
   $("video-live-indicators").innerHTML = [
-    ["얼굴 위치", sample.faceCentered ? "중앙 유지" : "위치 확인"],
-    ["눈", `${sample.blinks}회 · ${sample.blinkRate}회/분`],
-    ["상체", `${sample.upperBodyMoves}회 이동${sample.shoulderTilt ? " · 기울어짐" : ""}`],
-    ["손", sample.handCount ? `${sample.handCount}개 감지` : "화면 밖"],
-    ["입 주변", `아래 방향 ${sample.mouthFrownPercent}%`]
+    ["얼굴", `${Math.round((visual.faceCoverage || 0) * 100)}% 감지`],
+    ["눈", `${visual.blinkCount || 0}회`],
+    ["상체", `${visual.upperBodyMovementEvents || 0}회 이동${sample.shoulderTilt ? " · 기울어짐" : ""}`],
+    ["손", sample.hands?.length ? `${sample.hands.length}개 감지` : "화면 밖"],
+    ["입 주변", `아래 방향 ${visual.mouthFrownPercent || 0}%`]
   ].map(([label, value]) => `<article><span>${label}</span><b>${value}</b></article>`).join("");
 }
 
@@ -346,12 +256,12 @@ function renderOverlay() {
   const context = canvas.getContext("2d");
   context.clearRect(0, 0, canvas.width, canvas.height);
   drawPoints(context, sample.face, "#35d4ff", 1.5);
-  drawLines(context, sample.face, state.vision?.faceConnections, "rgba(53, 212, 255, .5)");
+  drawLines(context, sample.face, state.visual.connections?.face, "rgba(53, 212, 255, .5)");
   sample.hands?.forEach((hand) => {
     drawLines(context, hand, [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20]], "#ffbf3f");
     drawPoints(context, hand, "#ffbf3f", 3);
   });
-  drawLines(context, sample.pose, state.vision?.poseConnections, "#9aff77");
+  drawLines(context, sample.pose, state.visual.connections?.pose, "#9aff77");
   drawPoints(context, sample.pose, "#9aff77", 3);
   drawOverlayMetrics(context, sample);
 }
@@ -423,7 +333,9 @@ function startRecording() {
   state.transcript = "";
   state.followupText = "";
   state.recordedBlob = null;
-  state.visual = emptyVisual();
+  state.visual = null;
+  state.personaEvaluation = null;
+  state.visionStatus = "서버 분석 중";
   state.recorder = new MediaRecorder(state.stream);
   $("recording-checklist").hidden = true;
   $("live-caption").textContent = "";
@@ -431,7 +343,7 @@ function startRecording() {
   state.recorder.onstop = () => {
     state.recordedBlob = new Blob(state.chunks, { type: state.recorder.mimeType || "video/webm" });
     state.recordingUrl = URL.createObjectURL(state.recordedBlob);
-    transcribeWithFasterWhisper(state.recordedBlob);
+    processRecordedInterview(state.recordedBlob);
   };
   state.recorder.start();
   state.recording = true;
@@ -442,7 +354,6 @@ function startRecording() {
   $("finish-button").disabled = true;
   state.timerId = setInterval(updateTimer, 250);
   startSampling();
-  startVisionSampling();
 }
 
 function stopRecording() {
@@ -450,8 +361,6 @@ function stopRecording() {
   state.recording = false;
   clearInterval(state.timerId);
   clearInterval(state.sampleId);
-  cancelAnimationFrame(state.visionSampleId);
-  state.visionSampleId = null;
   state.duration = Math.max(1, Math.floor((Date.now() - state.startedAt) / 1000));
   if (state.silenceStartedAt !== null) {
     const finalSilence = performance.now() - state.silenceStartedAt;
@@ -477,8 +386,9 @@ function analyze() {
   if (!$("transcript-input").value) $("transcript-input").value = baseText;
   const text = [baseText, state.followupText].filter(Boolean).join("\n");
   const duration = state.duration;
+  const hasDelivery = state.mode === "video";
   const compact = text.replace(/\s/g, "");
-  const pace = Math.round((compact.length / duration) * 60);
+  const pace = hasDelivery ? Math.round((compact.length / duration) * 60) : 0;
   const fillerPattern = /(음|어|그니까|그러니까|약간|뭔가|사실은|아무튼)/g;
   const fillers = text.match(fillerPattern) || [];
   const data = roleData[$("role-select").value];
@@ -496,18 +406,18 @@ function analyze() {
   const volumeVariance = volumeValues.reduce((sum, value) => sum + (value - volumeMean) ** 2, 0) / Math.max(1, volumeValues.length);
   const voiceVariation = Math.sqrt(volumeVariance);
   const textAvailable = compact.length > 0;
-  const paceHealthy = pace >= 250 && pace <= 420;
+  const paceHealthy = !hasDelivery || (pace >= 250 && pace <= 420);
   const rubricMax = Math.max(3, rubricResults.length * 3);
   const score = textAvailable ? Math.min(95, Math.max(15, Math.round(18 + (rubricTotal / rubricMax) * 70 + (paceHealthy ? 5 : 0) - Math.min(8, fillers.length * 2)))) : 0;
 
   $("total-score").textContent = `${score}`;
   $("score-fill").style.width = `${score}%`;
-  $("pace-value").textContent = textAvailable ? `${pace}자` : "—";
-  $("pace-note").textContent = textAvailable ? (paceHealthy ? "안정 범위 / 분" : pace < 250 ? "조금 느림 / 분" : "조금 빠름 / 분") : "전사 입력 필요";
-  $("pause-value").textContent = `${state.silenceRuns.length}회`;
+  $("pace-value").textContent = hasDelivery && textAvailable ? `${pace}자` : "—";
+  $("pace-note").textContent = hasDelivery ? (textAvailable ? (paceHealthy ? "안정 범위 / 분" : pace < 250 ? "조금 느림 / 분" : "조금 빠름 / 분") : "전사 입력 필요") : "텍스트 면접";
+  $("pause-value").textContent = hasDelivery ? `${state.silenceRuns.length}회` : "—";
   $("filler-value").textContent = `${fillers.length}회`;
-  $("voice-value").textContent = volumeValues.length ? (voiceVariation > .025 ? "충분" : "낮음") : "—";
-  $("voice-note").textContent = volumeValues.length ? "음량 변화 기준" : "음성 데이터 없음";
+  $("voice-value").textContent = hasDelivery && volumeValues.length ? (voiceVariation > .025 ? "충분" : "낮음") : "—";
+  $("voice-note").textContent = hasDelivery && volumeValues.length ? "음량 변화 기준" : hasDelivery ? "음성 데이터 없음" : "텍스트 면접";
   $("transcript-source").textContent = state.transcript ? "faster-whisper medium · beam 5" : "직접 입력";
   renderRubricMap(rubricResults);
 
@@ -597,6 +507,14 @@ function feedbackItem(label, title, body, type) {
   return `<article class="feedback-item ${type}"><span>${escapeHtml(label)}</span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(body)}</p></div></article>`;
 }
 
+function applyPersonaFeedback(result) {
+  if (!result?.feedback?.length) return;
+  const evidence = result.evidence?.map((item) => `${item.source}: “${item.quote}”`).join(" · ");
+  $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, `${item.body}${evidence ? ` 근거: ${evidence}` : ""}`, item.type)).join("");
+  $("followup-context").textContent = result.followupQuestion || "이 기준에 대한 추가 질문은 없습니다.";
+  $("agent-feedback-status").textContent = `직무 AI 코치 피드백이 반영됐습니다. (${result.modelUsed || "server"})`;
+}
+
 async function requestAgentFeedback() {
   const transcript = $("transcript-input").value.trim() || state.transcript.trim();
   if (!transcript) return;
@@ -612,12 +530,9 @@ async function requestAgentFeedback() {
       itemId: currentQuestion?.item_id,
       transcript,
       followupAnswer: state.followupText,
-      deliveryMetrics: { durationSeconds: state.duration, longPauses: state.silenceRuns.length }
+      deliveryMetrics: state.mode === "video" ? { durationSeconds: state.duration, longPauses: state.silenceRuns.length } : { mode: "text" }
     });
-    const evidence = result.evidence?.map((item) => `${item.source}: “${item.quote}”`).join(" · ");
-    $("feedback-list").innerHTML = result.feedback.map((item) => feedbackItem(item.label, item.title, `${item.body}${evidence ? ` 근거: ${evidence}` : ""}`, item.type)).join("");
-    $("followup-context").textContent = result.followupQuestion || "이 기준에 대한 추가 질문은 없습니다.";
-    $("agent-feedback-status").textContent = `직무 AI 코치 피드백이 반영됐습니다. (${result.modelUsed})`;
+    applyPersonaFeedback(result);
   } catch (error) {
     $("agent-feedback-status").textContent = "AI 코치 피드백을 불러오지 못해 규칙 기반 피드백을 유지합니다.";
     console.error(error);
@@ -644,7 +559,32 @@ function showResults() {
   }
   if (!state.transcript) $("transcript-input").value = "";
   analyze();
+  applyPersonaFeedback(state.personaEvaluation);
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setInterviewMode(mode) {
+  state.mode = mode === "text" ? "text" : "video";
+  const textMode = state.mode === "text";
+  $("text-interview-panel").hidden = !textMode;
+  $("video-interview-panel").hidden = textMode;
+  $$('[data-interview-mode]').forEach((button) => {
+    const selected = button.dataset.interviewMode === state.mode;
+    button.setAttribute("aria-selected", String(selected));
+  });
+  if (textMode) state.questionRevealed = true;
+  updateRole();
+}
+
+function submitTextInterview() {
+  const answer = $("text-answer-input").value.trim();
+  if (!answer) return $("text-answer-input").focus();
+  state.transcript = answer;
+  state.duration = 1;
+  state.visual = null;
+  state.personaEvaluation = null;
+  showResults();
+  requestAgentFeedback();
 }
 
 function resetPractice() {
@@ -670,7 +610,7 @@ function resetPractice() {
   $("landmark-overlay").hidden = true;
   $("overlay-toggle").disabled = true;
   state.preparing = false;
-  state.questionRevealed = false;
+  state.questionRevealed = state.mode === "text";
   $("start-interview-button").disabled = !state.stream;
   $("record-button").disabled = true;
   $("record-label").textContent = "답변 녹화 시작";
@@ -681,6 +621,8 @@ function resetPractice() {
 $("role-select").addEventListener("change", () => { state.question = 0; state.followupText = ""; updateRole(); });
 $("next-question").addEventListener("click", () => { const count = state.interviewPersona?.questions.length || 3; state.question = (state.question + 1) % count; state.followupText = ""; updateRole(); });
 $("enable-camera").addEventListener("click", enableCamera);
+$$('[data-interview-mode]').forEach((button) => button.addEventListener("click", () => setInterviewMode(button.dataset.interviewMode)));
+$("submit-text-answer").addEventListener("click", submitTextInterview);
 $("start-interview-button").addEventListener("click", beginInterview);
 $("overlay-toggle").addEventListener("click", toggleOverlay);
 $("recording-playback").addEventListener("loadedmetadata", syncPlaybackOverlay);
@@ -707,7 +649,7 @@ $("submit-followup").addEventListener("click", () => {
   analyze();
   requestAgentFeedback();
 });
-updateRole();
+setInterviewMode(new URLSearchParams(window.location.search).get("mode") || "video");
 loadJobContext();
 
 function registerWebMcp() {

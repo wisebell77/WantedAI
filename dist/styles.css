@@ -28,3 +28,4 @@ button{padding:11px 15px;border-radius:12px;transition:transform .16s,border-col
 .icon-button{flex:none;white-space:nowrap}
 /* 내 답변 — 제목 줄과 입력창 사이 간격 */
 .transcript-card .card-heading{margin-bottom:14px}
+.interview-mode-switch{display:flex;gap:8px;margin:0 0 14px}.interview-mode-switch button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff}.text-interview-panel{border:1px solid var(--line);padding:16px}.text-interview-panel p{margin:0 0 12px;color:var(--muted);font-size:.9rem}.text-interview-panel textarea{min-height:220px}.text-interview-panel .record-button{margin-top:12px}

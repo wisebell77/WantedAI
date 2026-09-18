@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node server/local-server.mjs",
-    "dev:recommendation": "OVERLAP_DATA=./data/overlap/산출물 python3 web/server.py --port 8000",
+    "dev:recommendation": "OVERLAP_DATA='./data/overlap/#Uc0b0#Ucd9c#Ubb3c' .venv/bin/python web/server.py --port 8000",
     "build": "esbuild src/next-step.js --bundle --minify --sourcemap --outfile=dist/next-step.js",
     "test": "node --test tests/*.test.mjs",
     "transcribe": "python server/transcribe.py",

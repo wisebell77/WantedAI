@@ -77,6 +77,11 @@ function ymd(value = "") {
   const match = String(value).match(/^(\d{4})(\d{2})(\d{2})$/);
   return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
+function seoulDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const value = Object.fromEntries(parts.filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
 const contextByUrl = new Map();
 for (const item of contexts) {
   const rows = contextByUrl.get(item.sourceUrl) || [];
@@ -100,7 +105,10 @@ const livePostings = liveSource.map((item) => {
     jobFamily: exact?.jobFamily || "직무 미분류",
     employmentType: item.empWantedTypeNm || "",
     companyType: item.coClcdNm || "",
+    startDate: ymd(item.empWantedStdt),
+    startTime: item.empWantedStdtTime || null,
     deadline,
+    deadlineTime: item.empWantedEndtTime || null,
     sourceUrl: url,
     coachReady: Boolean(exact?.requiredSkills.length && exact?.responsibilities.length),
     requiredSkills: exact?.requiredSkills || []
@@ -251,8 +259,7 @@ function fallbackActions(input) {
     { title: "자소서 초안 작성", reason: "정리한 경험을 바탕으로 지원 동기를 초안으로 작성합니다.", priority: "medium" }
   ];
   if (input.mode !== "timeline") return [];
-  const due = input.jobContext.deadline ? new Date(`${input.jobContext.deadline}T23:59:59`) : null;
-  const days = due ? Math.max(0, Math.ceil((due - new Date()) / 86400000)) : null;
+  const days = input.jobContext.deadline ? daysUntilDeadline(input.jobContext.deadline) : null;
   const label = (ratio, fallback) => days === null ? fallback : (Math.max(0, Math.ceil(days * ratio)) ? `D-${Math.max(0, Math.ceil(days * ratio))}` : "마감일");
   return [
     { title: `${label(1, "1단계")} · 공고 요구사항 확인`, reason: `${skills}와 내 경험의 연결점을 정리합니다.`, priority: "high" },
@@ -261,14 +268,21 @@ function fallbackActions(input) {
     { title: `${label(0, "4단계")} · 제출 전 확인`, reason: "지원서와 필수 제출 정보를 마지막으로 확인합니다.", priority: "low" }
   ];
 }
+function daysUntilDeadline(deadline) {
+  const today = new Date(`${seoulDate()}T00:00:00`);
+  const due = new Date(`${deadline}T00:00:00`);
+  return Math.max(0, Math.round((due - today) / 86400000));
+}
 function addTimelineLabels(actions, input) {
   if (input.mode !== "timeline" || !input.jobContext.deadline) return actions;
-  const due = new Date(`${input.jobContext.deadline}T23:59:59`);
-  const days = Math.max(0, Math.ceil((due - new Date()) / 86400000));
+  const days = daysUntilDeadline(input.jobContext.deadline);
   return actions.map((item, index) => {
-    if (/^(D-\d+|마감일)/.test(item.title)) return item;
+    const title = String(item.title || "")
+      .replace(/^(D-\d+|마감일)\s*[·:：-]\s*/i, "")
+      .replace(/\s*\(D-\d+\)\s*$/i, "")
+      .trim();
     const remaining = Math.max(0, Math.ceil(days * (1 - index / Math.max(1, actions.length - 1))));
-    return { ...item, title: `${remaining ? `D-${remaining}` : "마감일"} · ${item.title}` };
+    return { ...item, title: `${remaining ? `D-${remaining}` : "마감일"} · ${title}` };
   });
 }
 function normalizeAgentResult(result, input) {
@@ -306,7 +320,7 @@ const server = createServer(async (req, res) => {
       return proxyRecommendation(req, res, "/api/recommend");
     }
     if (req.method === "GET" && url.pathname === "/api/v1/live-postings") {
-      const today = url.searchParams.get("asOf") || new Date().toISOString().slice(0, 10);
+      const today = url.searchParams.get("asOf") || seoulDate();
       const job = url.searchParams.get("job") || "";
       const q = (url.searchParams.get("q") || "").toLowerCase();
       const days = Number(url.searchParams.get("days") || 0);

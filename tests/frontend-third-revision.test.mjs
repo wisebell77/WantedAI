@@ -51,14 +51,13 @@ test("coach quick actions share centered layout styles", () => {
   assert.match(styles, /\.quick-action\{display:flex;align-items:center;justify-content:center;min-height:48px/);
 });
 
-test("interview navigation preserves postingId and standalone stays in-file", () => {
-  assert.match(source, /<button class="quick-action" type="button" data-interview>면접 연습<\/button>/);
+test("interview navigation preserves postingId and chooses an interview mode", () => {
+  assert.match(source, /data-interview-mode="text"/);
+  assert.match(source, /data-interview-mode="video"/);
   assert.doesNotMatch(source, /href="#interview-preview" data-interview/);
   assert.match(source, /new URL\('\/index\.html',window\.location\.origin\)/);
   assert.match(source, /url\.searchParams\.set\('postingId',job\.postingId\)/);
-  assert.match(source, /window\.NextStepPreview\?\.openInterview/);
-  assert.match(source, /window\.location\.protocol==='file:'/);
-  assert.match(source, /typeof openPreview==='function'/);
+  assert.match(source, /url\.searchParams\.set\('mode',button\.dataset\.interviewMode\)/);
   assert.match(previewBuilder, /openInterview\(job\)/);
   assert.match(previewBuilder, /previewDefinitionIndex/);
   assert.match(previewBuilder, /previewDefinitionIndex > previewHandlerIndex/);
@@ -83,19 +82,19 @@ test("standalone builder never lets replacement tokens corrupt embedded code", (
   assert.match(previewBuilder, /url\.includes\("\/api\/v1\/job-contexts\/"\)/);
 });
 
-test("interview entry keeps the integrated video interview untouched", () => {
+test("interview entry offers text and server-processed video interview", () => {
   assert.match(interview, /id="camera"/);
   assert.match(interview, /id="enable-camera"/);
   assert.match(interview, /id="record-button"/);
   assert.match(interview, /id="recording-playback"/);
   assert.match(interview, /id="landmark-overlay"/);
   assert.match(interview, /id="transcript-input"/);
-  // no separate text-mode screen was bolted on
-  assert.doesNotMatch(interview, /mode-tab|mode-switch|text-stage|text-answer|submit-text-answer/);
-  assert.doesNotMatch(interviewApp, /function setMode\(|function submitTextAnswer\(|state\.mode/);
-  // pipeline intact
-  assert.match(interviewApp, /transcribeWithFasterWhisper/);
-  assert.match(interviewApp, /setupVision/);
+  assert.match(interview, /id="text-answer-input"/);
+  assert.match(interview, /id="submit-text-answer"/);
+  assert.match(interviewApp, /function setInterviewMode/);
+  assert.match(interviewApp, /function submitTextInterview/);
+  assert.match(interviewApp, /\/api\/v1\/interview\/process/);
+  assert.doesNotMatch(interviewApp, /cdn\.jsdelivr\.net\/npm\/@mediapipe/);
   assert.match(interviewApp, /CareerCoachAPI\.evaluateInterview/);
   // standalone posting context only
   assert.match(interviewApp, /function currentPostingId\(\)/);
@@ -147,8 +146,12 @@ test("NEXT STEP proposes a concrete action and never invents fit or progress", (
 test("posting card shows the three states the server data actually produces", () => {
   // local-server.mjs: postingId is null when no JD context matched;
   // coachReady additionally requires requiredSkills AND responsibilities.
-  assert.match(source, /item\.coachReady\?'mint':item\.postingId\?'sun':'coral'/);
-  assert.match(source, /item\.coachReady\?'AI 코치 연결':item\.postingId\?'준비 정보 없음':'담기 불가'/);
+  assert.match(source, /AI 코치 준비 완료/);
+  assert.match(source, /JD 상세 없음/);
+  assert.match(source, /직무 정보 미연결/);
+  assert.match(source, /모집 일정/);
+  assert.match(server, /startTime: item\.empWantedStdtTime/);
+  assert.match(server, /startDate: ymd\(item\.empWantedStdt\)/);
   assert.match(source, /prepare&&!item\.coachReady\?`<p class="card-note">/);
   assert.match(styles, /\.posting-card \.card-note/);
 });
@@ -195,4 +198,16 @@ test("calendar uses saved deadlines and only dated preparation tasks", () => {
   assert.match(source, /match\(\/D-\(\\d\+\)\/i\)/);
   assert.match(source, /calendar\.events\.get\(day\)/);
   assert.match(styles, /\.calendar-date/);
+});
+
+test("live postings use the Korea date instead of UTC around midnight", () => {
+  assert.match(server, /timeZone: "Asia\/Seoul"/);
+  assert.match(server, /url\.searchParams\.get\("asOf"\) \|\| seoulDate\(\)/);
+  assert.doesNotMatch(server, /url\.searchParams\.get\("asOf"\) \|\| new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/);
+});
+
+test("coach keeps consultation as chat history without replacing the checklist", () => {
+  assert.match(source, /history\.push\(\{role:'user',content:message\},\{role:'assistant',content:out\.answer\}\);saveHistory/);
+  assert.match(source, /if\(mode==='timeline'\)\{const next=/);
+  assert.match(source, /준비 일정 짜기 결과만 여기에 반영돼요/);
 });
