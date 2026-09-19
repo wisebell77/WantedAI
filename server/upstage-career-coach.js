@@ -15,13 +15,23 @@ function stripJsonFence(value) {
   return value.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "");
 }
 
+// temperature 는 기본적으로 보내지 않는다.
+// gpt-5.6 계열은 기본값(1)만 받고 다른 값을 주면 400 을 낸다:
+//   "Unsupported value: 'temperature' does not support 0.2 with this model."
+// Upstage(solar)로 되돌릴 때는 LLM_TEMPERATURE=0.2 를 넣으면 예전대로 돈다.
+function withTemperature(body) {
+  const t = process.env.LLM_TEMPERATURE;
+  if (t !== undefined && t !== "" && Number.isFinite(Number(t))) body.temperature = Number(t);
+  return body;
+}
+
 async function callUpstage(messages, { apiKey, model, fetchImpl = fetch }) {
   const key = llmKey(apiKey);
   if (!key) throw new Error("LLM_API_KEY (or UPSTAGE_API_KEY) is required.");
   const response = await fetchImpl(llmUrl(), {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, stream: false, temperature: 0.2, messages })
+    body: JSON.stringify(withTemperature({ model, stream: false, messages }))
   });
   if (!response.ok) {
     const detail = await response.text();

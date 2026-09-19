@@ -110,8 +110,18 @@ def encode(path: Path, max_width: int) -> str | None:
 def ask(images: list[str], model: str, timeout: int) -> str:
     content = [{"type": "text", "text": PROMPT}]
     content += [{"type": "image_url", "image_url": {"url": u}} for u in images]
-    body = {"model": model, "stream": False, "temperature": 0,
+    body = {"model": model, "stream": False,
             "messages": [{"role": "user", "content": content}]}
+    # temperature 는 기본적으로 보내지 않는다. gpt-5.6 계열은 기본값(1)만 받고
+    # 다른 값을 주면 400 을 낸다 — "Unsupported value: 'temperature' does not
+    # support 0.2 with this model." 판독은 프롬프트가 전사만 시키므로 기본값으로
+    # 충분하다. Upstage 로 되돌릴 때만 LLM_TEMPERATURE 를 넣으면 된다.
+    raw = os.getenv("LLM_TEMPERATURE", "").strip()
+    if raw:
+        try:
+            body["temperature"] = float(raw)
+        except ValueError:
+            pass
     req = urllib.request.Request(
         endpoint(), data=json.dumps(body).encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {api_key()}",

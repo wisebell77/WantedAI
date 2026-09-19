@@ -60,19 +60,38 @@ def available() -> bool:
     return bool(_api_key())
 
 
+def _temperature(given: float | None) -> float | None:
+    """보낼 temperature. 없으면 아예 넣지 않는다.
+
+    gpt-5.6 계열은 기본값(1)만 받고 다른 값을 주면 400 을 낸다 —
+    `Unsupported value: 'temperature' does not support 0.2 with this model.`
+    Upstage(solar)로 되돌릴 때는 LLM_TEMPERATURE=0.2 를 넣으면 예전대로 돈다.
+    """
+    raw = os.getenv("LLM_TEMPERATURE")
+    if raw is None or raw.strip() == "":
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 def chat_json(system: str, user: str | dict, *, fast: bool = False,
-              temperature: float = 0.2, timeout: int = 60) -> dict | None:
+              temperature: float | None = None, timeout: int = 60) -> dict | None:
     if not available():
         return None
     model = _model(fast)
     body = {
-        "model": model, "stream": False, "temperature": temperature,
+        "model": model, "stream": False,
         "messages": [
             {"role": "system", "content": system + " 반드시 JSON 하나만 반환한다."},
             {"role": "user", "content": user if isinstance(user, str)
              else json.dumps(user, ensure_ascii=False)},
         ],
     }
+    t = temperature if temperature is not None else _temperature(None)
+    if t is not None:
+        body["temperature"] = t
     req = urllib.request.Request(
         _endpoint(), data=json.dumps(body).encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {_api_key()}",
