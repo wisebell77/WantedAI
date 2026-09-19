@@ -113,9 +113,11 @@ jobs:
         if: ${{ !inputs.skip_ocr }}
         continue-on-error: true
         env:
-          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          # 키만 Secret 이다. URL·모델명은 민감하지 않고, Secret 으로 넣으면
+          # 로그에서 *** 로 가려져 무엇이 돌았는지 못 본다.
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_FAST_MODEL: ${{ secrets.LLM_FAST_MODEL }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_FAST_MODEL: ${{ vars.LLM_FAST_MODEL }}
         run: python scripts/ocr_read.py
 
       - name: ⑦ 병합 + 직무 분해
