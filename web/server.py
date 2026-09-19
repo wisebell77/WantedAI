@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -204,19 +206,36 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--host", default="127.0.0.1")
+    # 컨테이너 플랫폼(Railway·Render·Cloud Run)은 PORT 를 주입한다. 그래서 환경변수를
+    # 기본값으로 읽되, 기본 호스트는 127.0.0.1 로 둔다 — 로컬에서 실수로 외부에
+    # 열리는 쪽이 컨테이너에서 안 열리는 쪽보다 나쁘다. 배포는 Dockerfile 이
+    # --host 0.0.0.0 을 명시한다.
+    ap.add_argument("--port", type=int, default=int(os.getenv("PORT") or 8000))
+    ap.add_argument("--host", default=os.getenv("HOST") or "127.0.0.1")
+    ap.add_argument("--no-warmup", action="store_true",
+                    help="기동 시 모델 예열을 건너뛴다(개발용)")
     args = ap.parse_args()
 
     if not PATHS.job_matrix.exists():
         print("행렬이 없다. 먼저 pipelines/build_matrix.py 를 돌릴 것.")
         return 1
 
-    print("엔진을 올리는 중... (임베딩 모델 로딩에 20초쯤 걸린다)", flush=True)
+    print("엔진을 올리는 중...", flush=True)
+    t0 = time.time()
     Handler.engine = Engine()
+
+    # **예열을 여기서 한다.** Engine() 은 0.2 초에 끝나지만 임베딩 모델은 첫
+    # 투영에서야 올라온다. 예열이 없으면 컨테이너가 곧바로 "준비 완료"를 알리고
+    # 헬스체크도 통과하는데, 정작 **첫 사용자가 19 초를 기다린다.**
+    # 심사 기간에 그 첫 사용자가 심사위원일 수 있다.
+    if not args.no_warmup:
+        print("  임베딩 모델 예열 중... (20초쯤)", flush=True)
+        Handler.engine.recommend([PRESETS["데이터분석"].split("\n")[0]], limit=1)
+
     n = len(Handler.engine.rec.matrix)
     llm = "켜짐" if Handler.engine.llm.available else "꺼짐(규칙 분리로 동작)"
-    print(f"준비 완료 — 직무 {n}개 · 근거 {len(Handler.engine.rec.evidence):,}쌍 · LLM {llm}")
+    print(f"준비 완료 ({time.time() - t0:.1f}초) — 직무 {n}개 · "
+          f"근거 {len(Handler.engine.rec.evidence):,}쌍 · LLM {llm}")
     print(f"  http://{args.host}:{args.port}  (Ctrl+C 로 종료)", flush=True)
 
     srv = ThreadingHTTPServer((args.host, args.port), Handler)

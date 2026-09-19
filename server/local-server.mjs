@@ -503,4 +503,8 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(Number(process.env.PORT || 4173), "127.0.0.1", () => console.log(`Overlap Career Coach: http://127.0.0.1:${process.env.PORT || 4173}`));
+// 컨테이너에서는 0.0.0.0 에 묶여야 외부에서 닿는다. 기본값은 127.0.0.1 로 두고
+// 배포에서 HOST 를 넘긴다 — 로컬에서 실수로 외부에 열리는 쪽이 더 나쁘다.
+const host = process.env.HOST || "127.0.0.1";
+const port = Number(process.env.PORT || 4173);
+server.listen(port, host, () => console.log(`Overlap Career Coach: http://${host}:${port}`));

@@ -55,10 +55,24 @@ def main() -> int:
     print(f"본문 확보 {len(good)}건 → {path}")
     print("  출처:", dict(corpus.stats))
 
+    # ⚠ 이 줄이 data/roles.json 을 덮어쓰는데 **post_tier 가 빠진다.**
+    # 팀원 쪽 persona 가 그 필드를 본다 — persona.data.load_roles(tier="A") 가
+    # 기본값이라, 없으면 0 개를 반환하고 job_market() 의 '시장 수요' 가중치가
+    # 통째로 죽는다(실제로 그렇게 됐다: 516 개 전부 post_tier=None).
+    #
+    # post_tier 를 매기는 건 레거시 scripts/analyze_jd.py 의 tier() 다.
+    # 그래서 여기를 돌린 뒤에는 **반드시** 아래를 이어서 돌려 roles.json 을
+    # 다시 만든다. 같은 data/jd_good.json 을 읽으므로 건수는 그대로고 필드만 붙는다.
+    #
+    #     python scripts/split_roles.py
+    #
+    # 두 구현을 합치는 게 맞지만(TECH·EXPR·GROUP 상수를 overlap 쪽으로 옮기면 된다)
+    # 그건 따로 할 일이다.
     roles = RoleSplitter().split_all(good)
     write_json(PATHS.roles, [r.to_dict() for r in roles], indent=1)
     print(f"공고 {len(good)}건 → 직무 {len(roles)}개 "
           f"(공고당 {len(roles) / max(len(good), 1):.1f})")
+    print("  ⚠ post_tier 가 빠졌다. `python scripts/split_roles.py` 를 이어서 돌릴 것.")
 
     jobs = Counter(r.job for r in roles)
     mx = max(jobs.values()) if jobs else 1

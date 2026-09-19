@@ -1,0 +1,54 @@
+# 빌드 컨텍스트에서 뺀다. Dockerfile 이 COPY 하는 것만 있으면 된다.
+#
+# data/ 를 통째로 넣지 않는 게 핵심이다. 수집 원본까지 있으면 1.4GB 가 넘고
+# 그만큼 빌드가 느려진다. Dockerfile 은 ARG ARTIFACTS 가 가리키는 폴더만 가져간다.
+
+.git/
+.gitignore
+.github/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# node_modules 만 뺀다. src/·server/·dist/ 는 Dockerfile.app 이 쓴다 —
+# 여기서 막으면 앱 컨테이너 빌드가 "COPY 대상 없음"으로 죽는다.
+# 엔진 Dockerfile 은 그것들을 COPY 하지 않으니 컨텍스트에 있어도 무해하다.
+node_modules/
+tests/
+
+# 수집 원본·중간 산출물 (Dockerfile 이 쓰지 않는다)
+data/jdfiles/
+data/ocr_img/
+data/ocr/
+data/ocr_txt/
+data/jdtext/
+data/jd/
+data/jd_js/
+data/alio/
+data/probe/
+data/tmap/
+data/*.npz
+data/jd_units.json
+data/jd_sections.json
+data/l2_clusters_[0-9]*.json
+data/*.prev.json
+data/*_legacy_*.json
+data/*.txt
+data/*.csv
+data/*.bak
+
+.env
+.env.*
+!.env.example
+
+docs/
+*.md
+!README.md
+
+.DS_Store
+Thumbs.db
+*.log

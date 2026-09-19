@@ -1,0 +1,53 @@
+# 두 컨테이너를 같이 띄운다. 배포 전에 여기서 붙는지 확인한다.
+#
+#   docker compose up --build
+#   http://127.0.0.1:4173
+#
+# 실제 배포(Railway 등)에서도 구조는 같다 — 서비스 둘을 만들고
+# app 의 RECOMMENDATION_BASE_URL 을 engine 의 내부 주소로 넘긴다.
+#
+# **왜 둘로 나누나.** 전사(faster-whisper)가 CPU 를 다 먹는 동안 추천이 같이
+# 멈추면 안 된다. 한 프로세스에 두면 면접 한 건이 진단 전체를 막는다.
+
+services:
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8000"
+    # 외부로 열지 않는다. app 만 내부망으로 부른다.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/jobs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s        # 기동에 예열 11~18초. 넉넉히 둔다
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G           # 실측 피크 488MB
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    ports:
+      - "4173:4173"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "4173"
+      RECOMMENDATION_BASE_URL: "http://engine:8000"
+      # 키는 .env 에서 온다. 없으면 코치·면접이 503 을 내고 진단은 그대로 돈다.
+      UPSTAGE_API_KEY: "${UPSTAGE_API_KEY:-}"
+      UPSTAGE_FAST_MODEL: "${UPSTAGE_FAST_MODEL:-solar-mini}"
+      UPSTAGE_COACH_MODEL: "${UPSTAGE_COACH_MODEL:-solar-pro4}"
+    depends_on:
+      engine:
+        condition: service_healthy   # 엔진이 뜬 뒤에 올라온다
+    deploy:
+      resources:
+        limits:
+          memory: 2G           # whisper medium 전사 중 피크를 감안
