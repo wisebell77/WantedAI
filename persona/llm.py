@@ -1,7 +1,17 @@
-"""Upstage(Solar) 호출 래퍼. 승민 님 코치 서버와 같은 엔드포인트·환경변수를 쓴다.
+"""LLM 호출 래퍼. 코치 서버(server/upstage-career-coach.js)와 같은 환경변수를 쓴다.
 
 키가 없거나 호출이 실패하면 None 을 돌려주고, 각 모듈은 규칙 기반으로 대체한다.
 외부 패키지 없이 표준 라이브러리만 쓴다.
+
+**제공자는 환경변수로 고른다.** 요청 본문이 OpenAI 호환 형식(`model`·`messages`·
+`temperature`)이라 URL·키·모델명만 바꾸면 Upstage 든 OpenAI 든 그대로 돈다.
+
+    LLM_BASE_URL    기본 https://api.upstage.ai/v1/chat/completions
+    LLM_API_KEY     없으면 UPSTAGE_API_KEY 를 쓴다
+    LLM_COACH_MODEL 판단이 필요한 곳 (채점표·서류심사·면접채점)
+    LLM_FAST_MODEL  가벼운 곳 (면접 질문 생성)
+
+기존 `UPSTAGE_*` 를 폴백으로 남겨 둔다 — 되돌릴 때 변수만 지우면 된다.
 """
 from __future__ import annotations
 
@@ -13,7 +23,23 @@ import urllib.request
 
 from .data import ROOT
 
-UPSTAGE_URL = "https://api.upstage.ai/v1/chat/completions"
+UPSTAGE_URL = "https://api.upstage.ai/v1/chat/completions"     # 기본값(하위 호환)
+
+
+def _endpoint() -> str:
+    return os.getenv("LLM_BASE_URL") or UPSTAGE_URL
+
+
+def _api_key() -> str:
+    return os.getenv("LLM_API_KEY") or os.getenv("UPSTAGE_API_KEY") or ""
+
+
+def _model(fast: bool) -> str:
+    if fast:
+        return (os.getenv("LLM_FAST_MODEL")
+                or os.getenv("UPSTAGE_FAST_MODEL") or "solar-mini")
+    return (os.getenv("LLM_COACH_MODEL")
+            or os.getenv("UPSTAGE_COACH_MODEL") or "solar-pro4")
 
 
 def _load_dotenv() -> None:
@@ -31,15 +57,14 @@ _load_dotenv()
 
 
 def available() -> bool:
-    return bool(os.getenv("UPSTAGE_API_KEY"))
+    return bool(_api_key())
 
 
 def chat_json(system: str, user: str | dict, *, fast: bool = False,
               temperature: float = 0.2, timeout: int = 60) -> dict | None:
     if not available():
         return None
-    model = (os.getenv("UPSTAGE_FAST_MODEL", "solar-mini") if fast
-             else os.getenv("UPSTAGE_COACH_MODEL", "solar-pro4"))
+    model = _model(fast)
     body = {
         "model": model, "stream": False, "temperature": temperature,
         "messages": [
@@ -49,8 +74,8 @@ def chat_json(system: str, user: str | dict, *, fast: bool = False,
         ],
     }
     req = urllib.request.Request(
-        UPSTAGE_URL, data=json.dumps(body).encode("utf-8"), method="POST",
-        headers={"Authorization": f"Bearer {os.environ['UPSTAGE_API_KEY']}",
+        _endpoint(), data=json.dumps(body).encode("utf-8"), method="POST",
+        headers={"Authorization": f"Bearer {_api_key()}",
                  "Content-Type": "application/json"})
     try:
         try:

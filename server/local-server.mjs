@@ -13,6 +13,12 @@ const dataDir = process.env.OVERLAP_DATA_DIR || join(root, "data", "overlap");
 const recommendationBase = process.env.RECOMMENDATION_BASE_URL || "http://127.0.0.1:8000";
 const pythonBin = process.env.PYTHON_BIN || (existsSync(join(root, ".venv", "bin", "python")) ? join(root, ".venv", "bin", "python") : "python3");
 
+// LLM 제공자는 환경변수로 고른다. 요청 본문이 OpenAI 호환이라 URL·키·모델명만
+// 바꾸면 Upstage 든 OpenAI 든 그대로 돈다. UPSTAGE_* 는 폴백으로 남긴다.
+const llmKey = () => process.env.LLM_API_KEY || process.env.UPSTAGE_API_KEY || "";
+const llmFastModel = () => process.env.LLM_FAST_MODEL || process.env.UPSTAGE_FAST_MODEL || "solar-mini";
+const llmCoachModel = () => process.env.LLM_COACH_MODEL || process.env.UPSTAGE_COACH_MODEL || "solar-pro4";
+
 try {
   const raw = await readFile(join(root, ".env"), "utf8");
   for (const line of raw.split(/\r?\n/)) {
@@ -308,9 +314,9 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     if (req.method === "GET" && url.pathname === "/api/v1/agent/status") {
       return sendJson(res, 200, {
-        configured: Boolean(process.env.UPSTAGE_API_KEY),
-        fastModel: process.env.UPSTAGE_FAST_MODEL || "solar-mini",
-        coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
+        configured: Boolean(llmKey()),
+        fastModel: llmFastModel(),
+        coachModel: llmCoachModel()
       });
     }
     if (req.method === "GET" && url.pathname === "/api/jobs") {
@@ -364,7 +370,7 @@ const server = createServer(async (req, res) => {
       }
     }
     if (req.method === "POST" && url.pathname === "/api/v1/agent/chat") {
-      if (!process.env.UPSTAGE_API_KEY) return sendJson(res, 503, { error: "UPSTAGE_API_KEY_MISSING" });
+      if (!llmKey()) return sendJson(res, 503, { error: "LLM_API_KEY_MISSING" });
       const input = await readJson(req);
       if (!validModes.has(input.mode)) return sendJson(res, 422, { error: "VALID_AGENT_MODE_REQUIRED" });
       const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
@@ -373,9 +379,9 @@ const server = createServer(async (req, res) => {
       if (!input.message?.trim()) return sendJson(res, 422, { error: "MESSAGE_REQUIRED" });
       try {
         const result = await runCareerCoachAgent({ ...input, jobContext: canonicalJob }, {
-          apiKey: process.env.UPSTAGE_API_KEY,
-          fastModel: process.env.UPSTAGE_FAST_MODEL || "solar-mini",
-          coachModel: process.env.UPSTAGE_COACH_MODEL || "solar-pro4"
+          apiKey: llmKey(),
+          fastModel: llmFastModel(),
+          coachModel: llmCoachModel()
         });
         return sendJson(res, 200, normalizeAgentResult(result, { ...input, jobContext: canonicalJob }));
       } catch (error) {

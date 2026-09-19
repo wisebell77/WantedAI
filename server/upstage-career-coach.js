@@ -1,28 +1,40 @@
+// 제공자는 환경변수로 고른다. 요청 본문이 OpenAI 호환 형식이라 URL·키·모델명만
+// 바꾸면 Upstage 든 OpenAI 든 그대로 돈다. persona/llm.py 도 같은 변수를 읽는다.
+//
+//   LLM_BASE_URL     기본 https://api.upstage.ai/v1/chat/completions
+//   LLM_API_KEY      없으면 UPSTAGE_API_KEY
+//   LLM_COACH_MODEL  판단이 필요한 곳 (자소서·상담·면접평가)
+//   LLM_FAST_MODEL   가벼운 곳 (타임라인·할 일·태깅)
+//
+// 기존 UPSTAGE_* 는 폴백으로 남긴다 — 되돌릴 때 변수만 지우면 된다.
 const UPSTAGE_URL = "https://api.upstage.ai/v1/chat/completions";
+const llmUrl = () => process.env.LLM_BASE_URL || UPSTAGE_URL;
+const llmKey = (given) => given || process.env.LLM_API_KEY || process.env.UPSTAGE_API_KEY || "";
 
 function stripJsonFence(value) {
   return value.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "");
 }
 
 async function callUpstage(messages, { apiKey, model, fetchImpl = fetch }) {
-  if (!apiKey) throw new Error("UPSTAGE_API_KEY is required.");
-  const response = await fetchImpl(UPSTAGE_URL, {
+  const key = llmKey(apiKey);
+  if (!key) throw new Error("LLM_API_KEY (or UPSTAGE_API_KEY) is required.");
+  const response = await fetchImpl(llmUrl(), {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, stream: false, temperature: 0.2, messages })
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Upstage request failed: ${response.status} ${detail.slice(0, 180)}`);
+    throw new Error(`LLM request failed (${model}): ${response.status} ${detail.slice(0, 180)}`);
   }
   const content = (await response.json()).choices?.[0]?.message?.content;
-  if (!content) throw new Error("Upstage returned no message content.");
+  if (!content) throw new Error("LLM returned no message content.");
   return JSON.parse(stripJsonFence(content));
 }
 
 export async function runCareerCoachAgent(input, options) {
-  const fastModel = options.fastModel || "solar-mini";
-  const coachModel = options.coachModel || "solar-pro4";
+  const fastModel = options.fastModel || process.env.LLM_FAST_MODEL || "solar-mini";
+  const coachModel = options.coachModel || process.env.LLM_COACH_MODEL || "solar-pro4";
   const model = ["timeline", "task_prioritization", "jd_tagging"].includes(input.mode) ? fastModel : coachModel;
   const system = [
     "당신은 선택된 직무의 한국어 취업 준비 코치다.",
@@ -51,7 +63,7 @@ export async function runCareerCoachAgent(input, options) {
 }
 
 export async function evaluateInterviewWithUpstage(input, options) {
-  const model = options.coachModel || "solar-pro4";
+  const model = options.coachModel || process.env.LLM_COACH_MODEL || "solar-pro4";
   const system = [
     "당신은 선택된 직무의 한국어 면접 코치다.",
     "제공된 채용공고와 면접 답변만 사실로 취급한다.",
