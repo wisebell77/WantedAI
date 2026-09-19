@@ -22,7 +22,13 @@ from urllib.robotparser import RobotFileParser
 
 import requests
 
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", r"D:\playwright-browsers")
+# 브라우저 위치는 윈도우에서만 D 드라이브로 밀어 둔다(C 드라이브 용량 때문).
+# 리눅스(GitHub Actions)에서 이 기본값을 걸면 `playwright install` 이 받아 둔
+# 곳을 못 찾아 BrowserType.launch 가 죽는다 —
+#   Executable doesn't exist at .../D:\playwright-browsers/chromium.../...
+# 이미 환경변수가 있으면 그대로 따른다.
+if os.name == "nt" and os.path.isdir(r"D:\playwright-browsers"):
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", r"D:\playwright-browsers")
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 SRC_CACHE = Path("data/jd")

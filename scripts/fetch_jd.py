@@ -100,9 +100,20 @@ def allowed(url):
         return True
 
 
+# lxml 이 없는 환경이면 표준 라이브러리 파서로 떨어진다.
+# GitHub Actions 에서 lxml 을 안 깔았더니 415 건이 통째로
+# `FeatureNotFound: Couldn't find a tree builder ... lxml` 로 날아갔다.
+# 파서가 없어서 수집이 0 건이 되는 건 조용한 실패라 더 나쁘다.
+try:
+    BeautifulSoup("", "lxml")
+    _PARSER = "lxml"
+except Exception:
+    _PARSER = "html.parser"
+
+
 def extract(html):
     """DOM 텍스트를 우선 쓰고, 비면 스크립트에 박힌 JSON 문자열을 훑는다."""
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, _PARSER)
     for t in soup(["style", "noscript", "svg"]):
         t.decompose()
     for t in soup(["script"]):
