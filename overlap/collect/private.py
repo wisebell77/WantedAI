@@ -115,7 +115,7 @@ class PrivateCorpus:
     >>> c = PrivateCorpus()
     >>> good = c.merge()
     >>> len(good)
-    285
+    291
     """
 
     def __init__(self, static=None, browser=None, ocr=None):
@@ -170,11 +170,20 @@ class PrivateCorpus:
         판독분에 500자 기준을 그대로 적용하면 안 된다. 사람이 읽어 옮긴
         텍스트는 네비게이션이 없어 군더더기가 빠진 만큼 짧다.
         완결된 단일 직무 공고가 길이 미달로 떨어지는 일이 실제로 있었다.
+
+        `sig` 도 같은 이유로 길이가 충분하면 묻지 않는다. SIGNALS 는 12 개뿐이라
+        같은 말을 다르게 적은 공고가 걸린다 — 코레일유통 `일반직(IT개발) 경력사원`
+        3,971 자가 sig 1 로, 한국학중앙연구원 2,063 자가 sig 0 으로 떨어졌다.
+        **sig 가 낮은 건 "공고가 아니다"가 아니라 "표현이 다르다"이다.**
+        1,500 자를 넘겨 놓고 채용공고가 아닌 문서는 수집 경로상 나오지 않는다.
+        이 면제로 6 건이 돌아왔고 잡음은 하나도 들어오지 않았다(285 → 291).
         """
         if r.get("status") != "ok":
             return False
         if r.get("src") == "ocr":
             return r.get("len", 0) >= 200
+        if r.get("len", 0) >= 1500:
+            return True
         return r.get("len", 0) >= 500 and r.get("sig", 0) >= 4
 
     @staticmethod
