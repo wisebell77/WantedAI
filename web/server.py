@@ -17,8 +17,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -204,6 +206,37 @@ class Handler(BaseHTTPRequestHandler):
         pass                                             # 요청 로그는 끈다
 
 
+class DualStackServer(ThreadingHTTPServer):
+    """IPv6 소켓 하나로 IPv4 까지 받는다.
+
+    **Railway 같은 컨테이너 플랫폼의 내부망은 IPv6 다.** `0.0.0.0` 에 묶으면
+    AF_INET 소켓이라 IPv6 로 들어오는 연결을 거부한다. 앱 컨테이너가
+    `engine.railway.internal:8080` 을 부르면 그대로 연결 거부가 나고,
+    프록시 쪽에는 `RECOMMENDATION_ENGINE_UNAVAILABLE` 로만 보여 원인을 못 찾는다.
+    Railway 문서도 같은 이유로 MongoDB 에 `--bind_ip ::,0.0.0.0` 을 권한다.
+
+    IPV6_V6ONLY 를 끄면 한 소켓이 양쪽을 받는다(리눅스 기본값이 이미 0 이지만
+    환경에 따라 1 인 경우가 있어 명시한다).
+    """
+
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        with contextlib.suppress(OSError):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        return super().server_bind()
+
+
+def serve(host: str, port: int) -> ThreadingHTTPServer:
+    """듀얼 스택으로 띄우되, IPv6 가 없는 환경이면 IPv4 로 떨어진다."""
+    if host in ("0.0.0.0", "::", ""):
+        try:
+            return DualStackServer(("::", port), Handler)
+        except OSError:
+            pass                                     # IPv6 미지원 — IPv4 로
+    return ThreadingHTTPServer((host, port), Handler)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     # 컨테이너 플랫폼(Railway·Render·Cloud Run)은 PORT 를 주입한다. 그래서 환경변수를
@@ -238,7 +271,7 @@ def main() -> int:
           f"근거 {len(Handler.engine.rec.evidence):,}쌍 · LLM {llm}")
     print(f"  http://{args.host}:{args.port}  (Ctrl+C 로 종료)", flush=True)
 
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    srv = serve(args.host, args.port)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
