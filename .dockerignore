@@ -14,12 +14,11 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
+# node_modules 만 뺀다. src/·server/·dist/ 는 Dockerfile.app 이 쓴다 —
+# 여기서 막으면 앱 컨테이너 빌드가 "COPY 대상 없음"으로 죽는다.
+# 엔진 Dockerfile 은 그것들을 COPY 하지 않으니 컨텍스트에 있어도 무해하다.
 node_modules/
-dist/
-src/
-server/
 tests/
-*.map
 
 # 수집 원본·중간 산출물 (Dockerfile 이 쓰지 않는다)
 data/jdfiles/
