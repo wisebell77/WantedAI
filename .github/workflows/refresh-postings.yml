@@ -89,8 +89,9 @@ jobs:
 
       - name: ① 공채속보 목록 갱신
         env:
+          # 공채속보(고용24)만 쓴다. ALIO(DATA_GO_KR_KEY)는 공공 직무기술서용이라
+          # 이 파이프라인과 무관하다 — 엔진 산출물을 다시 만들 때만 필요하다.
           WORK24_KEY_RECRUIT: ${{ secrets.WORK24_KEY_RECRUIT }}
-          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python pipelines/refresh_private.py
 
       - name: ② 본문 수집 (static · robots.txt 준수)
