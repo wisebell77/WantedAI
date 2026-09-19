@@ -1,0 +1,157 @@
+# 민간 공고 자동 수집 — 목록 → 본문 → 이미지 판독 → 병합 → 커밋.
+#
+# 커밋이 main 에 들어가면 Railway 가 앱을 다시 빌드한다(약 20분). 그래서 매일이
+# 아니라 주 3회로 돈다 — 목록이 썩지 않을 만큼은 되면서 재빌드 실패 위험은 줄인다.
+#
+# **수집 캐시는 레포에 넣지 않는다.** data/jd·jd_js·ocr 는 "이 URL 은 이미 받았다"는
+# 상태일 뿐인데, 레포에 커밋하면 공개 저장소에 공고 본문이 계속 쌓인다.
+# actions/cache 에 두면 실행 사이에는 남고 저장소에는 안 들어간다.
+# 캐시가 날아가도 스크립트가 다시 받을 뿐 결과는 같다(느려질 뿐이다).
+#
+# 처음에는 수동으로 한 번 돌려 보는 것을 권한다 — Actions 탭 > Run workflow.
+
+name: 민간 공고 갱신
+
+on:
+  schedule:
+    - cron: "0 20 * * 0,2,4"      # UTC 20:00 = 한국시간 05:00 (월·수·금)
+  workflow_dispatch:
+    inputs:
+      skip_ocr:
+        description: "이미지 판독을 건너뛴다 (LLM 키 없이 돌릴 때)"
+        type: boolean
+        default: false
+
+concurrency:                      # 앞 실행이 아직 돌면 새로 시작하지 않는다
+  group: refresh-postings
+  cancel-in-progress: false
+
+permissions:
+  contents: write                 # 결과를 main 에 되돌려 커밋한다
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 의존성
+        run: |
+          python -m pip install --quiet --upgrade pip
+          # 수집·판독에 필요한 것만. torch 는 필요 없다 —
+          # 역량 추출(임베딩)은 엔진 컨테이너가 하고 여기서는 안 돈다.
+          # python-dotenv 는 overlap/config.py 가 모듈 최상위에서 import 한다.
+          pip install --quiet requests beautifulsoup4 pillow olefile \
+                              python-dotenv "numpy>=2.0" playwright
+
+      - name: 브라우저 설치
+        # probe_images.py 와 fetch_jd_js.py 가 Playwright 를 쓴다. 컨테이너에는
+        # 무거워서 못 넣었지만 Actions 러너에서는 문제없다 — 오히려 여기서
+        # 브라우저 렌더링분(83건 계열)까지 자동으로 건질 수 있다.
+        run: playwright install --with-deps chromium
+
+      # 캐시는 "이미 받은 URL" 목록이다. 없으면 전부 다시 받게 되는데,
+      # 느린 것보다 상대 사이트에 실례라는 점이 더 크다.
+      - name: 수집 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/jd
+            data/jd_js
+            data/ocr
+            data/ocr_img
+            data/ocr_manifest.json
+            data/imgprobe.json
+          key: overlap-collect-${{ github.run_id }}
+          restore-keys: overlap-collect-
+
+      - name: 작업 공간 준비
+        run: |
+          set -eu
+          mkdir -p data/jd data/jd_js data/ocr data/ocr_img data/probe
+          # 레포의 배포본(data/overlap)을 스크립트가 기대하는 data/ 로 가져온다.
+          # 스크립트들이 Path("data/...") 를 하드코딩해서 OVERLAP_DATA 를 안 본다.
+          cp data/overlap/gongchae_all.json data/ 2>/dev/null || true
+          cp data/overlap/gongchae_all.json data/probe/ 2>/dev/null || true
+          cp data/overlap/roles.json        data/ 2>/dev/null || true
+          cp data/overlap/jd_tiered.json    data/ 2>/dev/null || true
+          cp data/overlap/analysis.json     data/ 2>/dev/null || true
+          # 한글 폴더명이 깨진 채 커밋돼 있어 그대로 따옴표로 참조한다.
+          cp 'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/jd_good.json' data/ 2>/dev/null || true
+          cp 'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/corpus.json'  data/ 2>/dev/null || true
+          ls -la data/ | head -20
+
+      - name: ① 공채속보 목록 갱신
+        env:
+          WORK24_KEY_RECRUIT: ${{ secrets.WORK24_KEY_RECRUIT }}
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: python pipelines/refresh_private.py
+
+      - name: ② 본문 수집 (static · robots.txt 준수)
+        continue-on-error: true       # 일부 도메인이 막혀도 나머지는 살린다
+        run: python scripts/fetch_jd.py
+
+      - name: ③ 본문 수집 (브라우저 렌더링)
+        continue-on-error: true
+        run: python scripts/fetch_jd_js.py
+
+      - name: ④ 이미지형 공고 판별
+        continue-on-error: true
+        run: python scripts/probe_images.py
+
+      - name: ⑤ 판독용 조각 준비
+        continue-on-error: true
+        run: python scripts/ocr_prep.py
+
+      - name: ⑥ 이미지 판독 (비전 모델)
+        if: ${{ !inputs.skip_ocr }}
+        continue-on-error: true
+        env:
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_FAST_MODEL: ${{ secrets.LLM_FAST_MODEL }}
+        run: python scripts/ocr_read.py
+
+      - name: ⑦ 병합 + 직무 분해
+        run: |
+          set -eu
+          python pipelines/refresh_private.py --merge-only
+          # post_tier 는 RoleSplitter 가 안 넣는다. 레거시 스크립트로 다시 만들어야
+          # persona 의 load_roles(tier="A") 와 job_market() 이 산다.
+          python scripts/split_roles.py
+
+      - name: ⑧ 배포본으로 되돌리기
+        run: |
+          set -eu
+          cp data/gongchae_all.json data/overlap/
+          cp data/roles.json        data/overlap/
+          cp data/jd_good.json 'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/' 2>/dev/null || true
+          cp data/corpus.json  'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/' 2>/dev/null || true
+          python - <<'PY'
+          import json, datetime
+          g = json.load(open("data/overlap/gongchae_all.json", encoding="utf-8"))
+          t = datetime.date.today().strftime("%Y%m%d")
+          live = [x for x in g if str(x.get("empWantedEndt", "")) >= t]
+          r = json.load(open("data/overlap/roles.json", encoding="utf-8"))
+          print(f"누적 {len(g)}건 · 모집 중 {len(live)}건 · 직무 {len(r)}개")
+          PY
+
+      - name: ⑨ 변경분 커밋
+        run: |
+          set -eu
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 배포본만 커밋한다. data/jd 같은 캐시는 actions/cache 에 남는다.
+          git add data/overlap
+          if git diff --cached --quiet; then
+            echo "바뀐 것이 없다. 커밋하지 않는다."
+            exit 0
+          fi
+          git commit -m "데이터: 민간 공고 자동 갱신 ($(date -u +%Y-%m-%d))"
+          git push
