@@ -121,6 +121,108 @@ const livePostings = liveSource.map((item) => {
   };
 }).sort((a, b) => String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")));
 
+// ── 경험 ↔ 모집 중 공고 대조 ────────────────────────────────────────────────
+// 직무 추천(NCS)과 실시간 공고의 축이 달라, 추천 결과로 실제 지원할 공고를 찾을 수 없었다.
+// 여기서는 실시간 공고 탭이 쓰는 바로 그 데이터(livePostings + contexts)로 대조해
+// "지금 지원 가능한 공고" 를 근거와 함께 돌려준다. 축이 같으므로 이름이 어긋나지 않는다.
+const contextById = new Map(contexts.map((row) => [row.postingId, row]));
+const SKILL_DF = new Map();
+for (const row of contexts) {
+  for (const skill of new Set((row.requiredSkills || []).map((s) => s.toLowerCase()))) {
+    SKILL_DF.set(skill, (SKILL_DF.get(skill) || 0) + 1);
+  }
+}
+const SKILL_VOCAB = [...SKILL_DF.keys()].sort((a, b) => b.length - a.length);
+const SKILL_ALIAS = { "파이썬": "python", "엑셀": "excel", "자바": "java", "리액트": "react", "깃": "git", "깃허브": "git", "오라클": "oracle", "리눅스": "linux" };
+const skillIdf = (skill) => Math.log(1 + contexts.length / (1 + (SKILL_DF.get(skill) || 0)));
+const CAREER_RE = /경력\s*(\d+)\s*년|(\d+)\s*년\s*이상/;
+const GRADUATE_RE = /(석사|박사)\s*(학위)?\s*(이상|소지|보유|취득)/;
+
+function hasTerm(term, text) {
+  if (term.length <= 2 && /^[\x20-\x7e]+$/.test(term)) {
+    return new RegExp(`(?<![A-Za-z&+#])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z&+#])`, "i").test(text);
+  }
+  return text.toLowerCase().includes(term);
+}
+function bigrams(text) {
+  const clean = (text || "").toLowerCase().replace(/\s+/g, "");
+  const out = new Set();
+  for (let i = 0; i < clean.length - 1; i += 1) out.add(clean.slice(i, i + 2));
+  return out;
+}
+function similarity(a, b) {
+  const left = bigrams(a); const right = bigrams(b);
+  if (!left.size || !right.size) return 0;
+  let shared = 0;
+  for (const gram of left) if (right.has(gram)) shared += 1;
+  return shared / (left.size + right.size - shared);
+}
+function requirementLines(context) {
+  return (context?.responsibilities || []).join("\n").split(/\n|·|•|\u2219/)
+    .map((line) => line.replace(/^[\s\-*■□▶ㆍ]+/, "").trim())
+    .filter((line) => line.length >= 6 && line.length <= 70).slice(0, 12);
+}
+function eligibility(context, text) {
+  const body = (context?.responsibilities || []).join("\n").split("\n")
+    .filter((line) => !line.includes("우대")).join("\n");
+  const reasons = [];
+  const career = body.match(CAREER_RE);
+  if (career && !text.includes("신입")) reasons.push(`경력 ${career[1] || career[2]}년 이상 요구`);
+  const graduate = body.match(GRADUATE_RE);
+  if (graduate) reasons.push(`${graduate[1]} 학위 요구`);
+  return reasons;
+}
+
+function matchPostings({ texts = [], families = [], today = seoulDate(), limit = 5 }) {
+  const userText = texts.join("\n");
+  if (!userText.trim()) return { items: [], userSkills: [] };
+  const userSentences = userText.split(/[.\n]/).map((s) => s.trim()).filter((s) => s.length >= 5);
+  const userSkills = SKILL_VOCAB.filter((skill) => hasTerm(skill, userText))
+    .concat(Object.entries(SKILL_ALIAS).filter(([ko]) => userText.includes(ko)).map(([, en]) => en));
+  const skillSet = new Set(userSkills);
+
+  const scored = [];
+  for (const posting of livePostings) {
+    if (posting.deadline && posting.deadline < today) continue;
+    const context = contextById.get(posting.postingId);
+    const skills = (posting.requiredSkills || []).map((s) => s.toLowerCase());
+    const shared = skills.filter((skill) => skillSet.has(skill));
+    const skillScore = skills.length
+      ? shared.reduce((sum, s) => sum + skillIdf(s), 0) / skills.reduce((sum, s) => sum + skillIdf(s), 0) : 0;
+    const lines = requirementLines(context);
+    const evidence = [];
+    for (const line of lines) {
+      let best = { score: 0, sentence: "" };
+      for (const sentence of userSentences) {
+        const score = similarity(sentence, line);
+        if (score > best.score) best = { score, sentence };
+      }
+      const skillHit = shared.some((skill) => hasTerm(skill, line));
+      if (best.score >= 0.12 || skillHit) evidence.push({ jdQuote: line, userQuote: best.sentence, score: Number(best.score.toFixed(2)) });
+    }
+    const requirementScore = lines.length ? evidence.length / lines.length : 0;
+    const familyScore = families.includes(posting.jobFamily) ? 1 : 0;
+    let score = 0.5 * skillScore + 0.35 * requirementScore + 0.15 * familyScore;
+    if (score <= 0) continue;
+    const reasons = eligibility(context, userText);
+    if (reasons.length) score *= 0.7;
+    scored.push({
+      postingId: posting.postingId, externalId: posting.externalId,
+      companyName: posting.companyName, positionTitle: posting.positionTitle,
+      jobFamily: posting.jobFamily, deadline: posting.deadline, sourceUrl: posting.sourceUrl,
+      coachReady: posting.coachReady, score: Number(score.toFixed(3)),
+      sharedSkills: shared, evidence: evidence.slice(0, 2),
+      status: reasons.length ? "준비 필요" : "지금 지원 가능", reasons
+    });
+  }
+  const seen = new Set();
+  const items = scored.sort((a, b) => b.score - a.score || String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")))
+    .filter((row) => { const key = row.sourceUrl || row.postingId; if (seen.has(key)) return false; seen.add(key); return true; })
+    .slice(0, limit);
+  return { items, userSkills: [...new Set(userSkills)],
+    note: "겹침 정도이며 합격 가능성이 아닙니다. 자격 요건은 공고 원문에서 확인하세요." };
+}
+
 const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webp": "image/webp" };
 const sendJson = (res, status, body) => { res.writeHead(status, { "Content-Type": mime[".json"] }); res.end(JSON.stringify(body)); };
 async function readJson(req) {
@@ -321,6 +423,14 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/jobs") {
       return proxyRecommendation(req, res, "/api/jobs");
+    }
+    if (req.method === "POST" && url.pathname === "/api/v1/posting-matches") {
+      const input = await readJson(req);
+      const texts = Array.isArray(input.texts) ? input.texts : String(input.text || "").split(/\n+/);
+      return sendJson(res, 200, matchPostings({
+        texts: texts.filter(Boolean), families: input.families || [],
+        today: input.asOf || seoulDate(), limit: Number(input.limit) || 5
+      }));
     }
     if (req.method === "POST" && url.pathname === "/api/recommend") {
       return proxyRecommendation(req, res, "/api/recommend");

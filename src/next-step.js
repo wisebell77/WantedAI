@@ -1,5 +1,5 @@
 import { animate, stagger } from "motion";
-import { createBrowserStore, loadCareerData, requestCoach, requestEssayReview, requestRecommendation } from "./services.js";
+import { createBrowserStore, loadCareerData, requestCoach, requestEssayReview, requestRecommendation, requestPostingMatches } from "./services.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -18,6 +18,8 @@ const experienceCategories = {
 const storedExperienceInputs = (storedAuth ? storage : session).get("experienceInputs", null);
 const state = {
   auth: storedAuth, guest: sessionStorage.getItem("nextstep.guest") === "1",
+  pendingJobFamily: "",
+  postingMatches: null,                 // 경험 ↔ 모집 중 공고 대조 결과                 // 직무 추천 카드에서 넘어올 때 실시간 공고에 걸 필터
   profile: initialProfile,
   experienceInputs: storedExperienceInputs || {...emptyExperienceInputs,project:initialProfile.experiences || ""},
   experienceCategory:"certificate",
@@ -232,13 +234,26 @@ function recommend() {
         <div class="form-foot"><small>카테고리별 입력 내용은 전환 후에도 유지돼요.</small><button class="button primary" id="run-recommend">직무 연결 분석하기</button></div></div>
     </div></section>`}</main>`);
 }
+function renderPostingMatches() {
+  const data=state.postingMatches;
+  if(!data) return "";
+  if(data.error) return `<div class="alert error">${safe(data.error)}</div>`;
+  if(!data.items?.length) return `<div class="section-head"><div><h2>지금 지원할 수 있는 공고</h2><p>모집 중인 공고 중에는 겹치는 곳을 찾지 못했어요. 아래 직무 연결을 참고해 보세요.</p></div><button class="text-link" data-go="jobs">전체 공고 보기</button></div>`;
+  return `<div class="section-head"><div><h2>지금 지원할 수 있는 공고</h2><p>내 경험과 공고 요건이 겹치는 순서예요. ${safe(data.note||"")}</p></div><button class="text-link" data-go="jobs">전체 공고 보기</button></div>
+    <div class="posting-grid">${data.items.map(item=>{
+      const live=state.live.find(x=>x.postingId&&x.postingId===item.postingId)||item;
+      const skills=item.sharedSkills?.length?`<div class="skill-row">${item.sharedSkills.map(s=>`<span class="skill">${safe(s)}</span>`).join("")}</div>`:"";
+      const evidence=(item.evidence||[]).map(e=>`<div class="evidence">공고 · ${safe(e.jdQuote)}${e.userQuote?`<br>내 경험 · ${safe(e.userQuote)}`:""}</div>`).join("");
+      const caution=item.reasons?.length?`<div class="card-note">준비 필요 · ${safe(item.reasons.join(", "))}</div>`:"";
+      return `<div class="match-posting">${postingCard(live)}${skills}${evidence}${caution}</div>`;}).join("")}</div>`;
+}
 function renderRecommendation(result) {
   if(!result) return "";
   if(result.error) return `<div class="alert error">${safe(result.error)}</div>`;
   const matches=(result.matches||[]).slice(0,5);
   const target=matches.find(m=>m.name===state.targetRole)||matches[0];
   const cards=state.recommendationMode==="target"&&target?[target]:matches;
-  return `<div class="section-head"><div><h2>${state.recommendationMode==="target"?'목표 직무와 내 경험 비교':'경험에서 발견한 직무 연결'}</h2><p>${state.recommendationMode==="target"?'목표 직무를 선택해 연결된 경험 근거를 확인해요.':'점수 대신 실제로 겹친 역량과 근거를 보여드려요.'}</p></div><button class="text-link" data-edit-experience>경험 다시 입력</button></div><div class="segmented"><button class="${state.recommendationMode==='fit'?'active':''}" data-recommend-mode="fit">나에게 맞는 직무 찾기</button><button class="${state.recommendationMode==='target'?'active':''}" data-recommend-mode="target">목표 직무와 비교하기</button></div>${state.recommendationMode==="target"?`<label class="target-role-label">목표 직무<select class="select" id="target-role">${matches.map(m=>`<option ${m.name===target?.name?'selected':''}>${safe(m.name)}</option>`).join('')}</select></label>`:''}<div class="result-list">${cards.map(m=>`<article class="match-card"><h3>${safe(m.name)}</h3><p>${safe(m.sentence||m.description||"")}</p><div class="skill-row">${(m.have||[]).slice(0,5).map(h=>`<span class="skill">${safe(h.competency)}</span>`).join("")}</div>${m.have?.[0]?.quotes?.[0]?`<div class="evidence">근거 · ${safe(m.have[0].quotes[0].text)}</div>`:""}</article>`).join("")}</div><div class="form-foot"><small>지원 가능한 공고는 실시간 공고에서 확인할 수 있어요.</small><button class="button secondary" data-go="jobs">실시간 공고로 이동</button></div>`;
+  return `${renderPostingMatches()}<div class="section-head"><div><h2>${state.recommendationMode==="target"?'목표 직무와 내 경험 비교':'이런 직무도 맞을 수 있어요'}</h2><p>${state.recommendationMode==="target"?'목표 직무를 선택해 연결된 경험 근거를 확인해요.':'공공 직무기술서 기준이라 지금 모집 중인 공고와는 다를 수 있어요. 탐색용으로 봐주세요.'}</p></div><button class="text-link" data-edit-experience>경험 다시 입력</button></div><div class="segmented"><button class="${state.recommendationMode==='fit'?'active':''}" data-recommend-mode="fit">나에게 맞는 직무 찾기</button><button class="${state.recommendationMode==='target'?'active':''}" data-recommend-mode="target">목표 직무와 비교하기</button></div>${state.recommendationMode==="target"?`<label class="target-role-label">목표 직무<select class="select" id="target-role">${matches.map(m=>`<option ${m.name===target?.name?'selected':''}>${safe(m.name)}</option>`).join('')}</select></label>`:''}<div class="result-list">${cards.map(m=>`<article class="match-card"><h3>${safe(m.name)}${m.jobFamily?`<span class="chip">${safe(m.jobFamily)} 계열</span>`:""}</h3><p>${safe(m.sentence||m.description||"")}</p><div class="skill-row">${(m.have||[]).slice(0,5).map(h=>`<span class="skill">${safe(h.competency)}</span>`).join("")}</div>${m.have?.[0]?.quotes?.[0]?`<div class="evidence">근거 · ${safe(m.have[0].quotes[0].text)}</div>`:""}${m.jobFamily?`<button class="button small secondary" data-family="${safe(m.jobFamily)}">${safe(m.jobFamily)} 공고 보기</button>`:""}</article>`).join("")}</div><div class="form-foot"><small>지원 가능한 공고는 실시간 공고에서 확인할 수 있어요.</small><button class="button secondary" data-go="jobs">실시간 공고로 이동</button></div>`;
 }
 function coach() {
   const job=state.selected||savedItems()[0];
@@ -266,13 +281,17 @@ function findPosting(card){const id=card?.dataset.posting;return state.live.find
 function bindPostingCards(root=document){$$('.posting-card',root).forEach(card=>{const item=findPosting(card); $('[data-save]',card)?.addEventListener('click',()=>{if(!item)return toast('이 공고는 직무 상세 정보가 아직 연결되지 않아 담아둘 수 없어요. 공고 원문은 바로 확인할 수 있어요.');if(!canPersist())return; const items=savedItems();const idx=items.findIndex(x=>x.postingId===item.postingId&&x.externalId===item.externalId);if(idx>=0)items.splice(idx,1);else items.push(item);persistForSession(state.auth?'saved':'guestSaved',items);toast(idx>=0?'내 공고함에서 뺐어요.':state.auth?'내 공고함에 담았어요.':'체험용 내 공고함에 담았어요.');render();});$('[data-coach]',card)?.addEventListener('click',()=>{state.selected=item;go('coach')});});}
 function bindPage(){
   if(state.route==='landing'){animate($('.landing-copy'),{opacity:[0,1],y:[18,0]},{duration:.55});$('#login-button').onclick=()=>openAuth();$('#guest-button').onclick=()=>{state.guest=true;state.auth=null;state.profile=session.get('guestProfile',emptyProfile);state.experienceInputs=session.get('experienceInputs',{...emptyExperienceInputs,project:state.profile.experiences || ''});state.experienceCategory='certificate';sessionStorage.setItem('nextstep.guest','1');go('home')};return;}
+  $$('[data-family]').forEach(el=>el.addEventListener('click',()=>{state.pendingJobFamily=el.dataset.family;go('jobs');}));
   bindPostingCards(); $('#home-login')?.addEventListener('click',()=>openAuth()); $('#profile-login')?.addEventListener('click',()=>openAuth()); $('[data-focus]')?.addEventListener('click',()=>{state.selected=focusJob();go('coach')});
   const calendarCard=$('#open-calendar'); if(calendarCard){calendarCard.addEventListener('click',event=>{if(event.target.matches('input'))event.preventDefault();openCalendarModal();});calendarCard.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openCalendarModal();}});}
-  if(state.route==='jobs'){const apply=()=>{const terms=$('#job-search').value.toLowerCase().split(/\s+/).filter(Boolean),job=$('#job-filter').value,days=Number($('#deadline-filter').value);const list=state.live.filter(x=>{const searchable=`${x.companyName||""} ${x.positionTitle||""} ${x.jobFamily||""} ${(x.requiredSkills||[]).join(" ")}`.toLowerCase();return terms.every(term=>searchable.includes(term))&&(!job||x.jobFamily===job)&&(!days||daysLeft(x.deadline)<=days);});$('#all-postings').innerHTML=list.slice(0,60).map(postingCard).join('');$('.result-count').textContent=`${list.length}건`;bindPostingCards($('#all-postings'));};['#job-search','#job-filter','#deadline-filter'].forEach(s=>$(s).addEventListener('input',apply));$('#manual-posting').onclick=()=>toast('직접 등록은 공통 postingId API 합의 후 연결돼요.');}
+  if(state.route==='jobs'){const apply=()=>{const terms=$('#job-search').value.toLowerCase().split(/\s+/).filter(Boolean),job=$('#job-filter').value,days=Number($('#deadline-filter').value);const list=state.live.filter(x=>{const searchable=`${x.companyName||""} ${x.positionTitle||""} ${x.jobFamily||""} ${(x.requiredSkills||[]).join(" ")}`.toLowerCase();return terms.every(term=>searchable.includes(term))&&(!job||x.jobFamily===job)&&(!days||daysLeft(x.deadline)<=days);});$('#all-postings').innerHTML=list.slice(0,60).map(postingCard).join('');$('.result-count').textContent=`${list.length}건`;bindPostingCards($('#all-postings'));};['#job-search','#job-filter','#deadline-filter'].forEach(s=>$(s).addEventListener('input',apply));
+    if(state.pendingJobFamily){const want=state.pendingJobFamily;state.pendingJobFamily='';const opt=[...$('#job-filter').options].find(o=>(o.value||o.text)===want);if(opt){$('#job-filter').value=opt.value||opt.text;apply();if(!state.live.some(x=>x.jobFamily===want))toast(`${want} 계열 공고는 지금 모집 중인 것이 없어요.`);}else{toast(`${want} 계열 공고는 지금 모집 중인 것이 없어요.`);}}$('#manual-posting').onclick=()=>toast('직접 등록은 공통 postingId API 합의 후 연결돼요.');}
   if(state.route==='recommend'){
     $('#experience-input')?.addEventListener('input',event=>{state.experienceInputs[state.experienceCategory]=event.target.value;persistForSession('experienceInputs',state.experienceInputs);});
     $$('[data-experience-category]').forEach(button=>button.addEventListener('click',()=>{state.experienceInputs[state.experienceCategory]=$('#experience-input').value;persistForSession('experienceInputs',state.experienceInputs);state.experienceCategory=button.dataset.experienceCategory;render();}));
-    $('#run-recommend')?.addEventListener('click',async()=>{state.experienceInputs[state.experienceCategory]=$('#experience-input').value;persistForSession('experienceInputs',state.experienceInputs);const text=Object.entries(experienceCategories).map(([key,item])=>({label:item.label,value:(state.experienceInputs[key]||'').trim()})).filter(item=>item.value).map(item=>`[${item.label}]\n${item.value}`).join('\n\n');if(!text)return toast('경험을 한 가지 이상 입력해 주세요.');state.profile.experiences=text;persistForSession(state.auth?'profile':'guestProfile',state.profile);$('.input-stage').innerHTML='<div class="alert info">경험의 근거를 분석하고 있어요.</div>';try{state.recommendation=await requestRecommendation(text);state.recommendationMode='fit';state.targetRole='';}catch(error){state.recommendation={error:`직무 추천 요청 실패: ${error.code||error.message}`};}render();});
+    $('#run-recommend')?.addEventListener('click',async()=>{state.experienceInputs[state.experienceCategory]=$('#experience-input').value;persistForSession('experienceInputs',state.experienceInputs);const text=Object.entries(experienceCategories).map(([key,item])=>({label:item.label,value:(state.experienceInputs[key]||'').trim()})).filter(item=>item.value).map(item=>`[${item.label}]\n${item.value}`).join('\n\n');if(!text)return toast('경험을 한 가지 이상 입력해 주세요.');state.profile.experiences=text;persistForSession(state.auth?'profile':'guestProfile',state.profile);$('.input-stage').innerHTML='<div class="alert info">경험의 근거를 분석하고 있어요.</div>';try{state.recommendation=await requestRecommendation(text);state.recommendationMode='fit';state.targetRole='';}catch(error){state.recommendation={error:`직무 추천 요청 실패: ${error.code||error.message}`};}
+    try{state.postingMatches=await requestPostingMatches(text,(state.recommendation?.matches||[]).map(m=>m.jobFamily).filter(Boolean));}catch(error){state.postingMatches={error:`공고 추천 요청 실패: ${error.code||error.message}`};}
+    render();});
     $$('[data-recommend-mode]').forEach(button=>button.addEventListener('click',()=>{state.recommendationMode=button.dataset.recommendMode;render();}));
     $('#target-role')?.addEventListener('change',event=>{state.targetRole=event.target.value;render();});
     $('[data-edit-experience]')?.addEventListener('click',()=>{state.recommendation=null;state.recommendationMode='fit';state.targetRole='';render();});
