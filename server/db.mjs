@@ -31,6 +31,15 @@ async function loadPg() {
   return pgMod;
 }
 
+/** 사설망인가 — Railway 내부 DNS, localhost, 루프백. */
+function isPrivateHost(url) {
+  let raw = null;
+  try { raw = new URL(url).hostname; } catch { return false; }
+  const host = raw.startsWith("[") ? raw.slice(1, -1) : raw;   // [::1] 의 대괄호
+  return host.endsWith(".railway.internal")
+      || host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 async function getPool() {
   if (pool) return pool;
   if (!configured()) return null;
@@ -38,10 +47,10 @@ async function getPool() {
   if (!pg) return null;
   pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    // Railway 내부망은 인증서를 따로 주지 않는다. 외부에서 붙을 때만 SSL 이 필요하고
-    // 그때도 자체 서명이라 검증을 끈다.
-    ssl: /\brailway\.internal\b/.test(process.env.DATABASE_URL)
-      ? false : { rejectUnauthorized: false },
+    // 사설망(Railway 내부망 · 로컬)은 SSL 을 안 받는다. 여기에 ssl 을 주면 pg 가
+    // "The server does not support SSL connections" 로 죽는다. 공개망으로 붙을
+    // 때만 켜고, 그때도 자체 서명 인증서라 검증은 끈다.
+    ssl: isPrivateHost(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false },
     max: 4,                       // 앱 컨테이너 하나뿐이라 넉넉하다
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 8_000,
@@ -106,6 +115,14 @@ export function lastErrorMessage() {
   return lastError ? String(lastError.message || lastError) : "";
 }
 
+/**
+ * JSONB 파라미터. **반드시 거쳐야 한다.**
+ * pg 는 JS 객체는 JSON 으로 보내지만 **배열은 Postgres 배열 리터럴**로 보낸다.
+ * 자소서 초안(sections)처럼 최상위가 배열이면 jsonb 컬럼에서
+ * "invalid input syntax for type json" 으로 죽는다.
+ */
+const asJson = (v) => JSON.stringify(v ?? {});
+
 async function q(text, params) {
   const p = await getPool();
   if (!p) throw new Error(lastErrorMessage() || "DATABASE_URL_MISSING");
@@ -133,7 +150,7 @@ export async function putProfile(userId, data) {
   await q(
     `INSERT INTO profiles (user_id, data) VALUES ($1, $2)
      ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-    [userId, data]);
+    [userId, asJson(data)]);
 }
 
 export async function listSaved(userId) {
@@ -147,7 +164,7 @@ export async function addSaved(userId, postingId, data) {
   await q(
     `INSERT INTO saved_postings (user_id, posting_id, data) VALUES ($1, $2, $3)
      ON CONFLICT (user_id, posting_id) DO UPDATE SET data = EXCLUDED.data`,
-    [userId, String(postingId), data || {}]);
+    [userId, String(postingId), asJson(data)]);
 }
 
 export async function removeSaved(userId, postingId) {
@@ -166,7 +183,7 @@ export async function putDraft(userId, postingId, data) {
     `INSERT INTO drafts (user_id, posting_id, data) VALUES ($1, $2, $3)
      ON CONFLICT (user_id, posting_id) DO UPDATE
         SET data = EXCLUDED.data, updated_at = now()`,
-    [userId, String(postingId), data || {}]);
+    [userId, String(postingId), asJson(data)]);
 }
 
 /** 사용자가 지우기를 요청하면 전부 지운다. ON DELETE CASCADE 가 나머지를 따라 지운다. */

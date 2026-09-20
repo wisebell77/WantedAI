@@ -84,12 +84,30 @@ function baseUrl(req) {
 const redirectUri = (req) => `${baseUrl(req)}/auth/google/callback`;
 const isSecure = (req) => baseUrl(req).startsWith("https:");
 
+/**
+ * 로그인 뒤 돌아갈 곳. **우리 사이트 안이어야 한다.**
+ * 안 막으면 /auth/google?next=https://남의사이트 로 열린 리디렉션이 된다 —
+ * 우리 도메인 링크를 눌렀는데 로그인 직후 남의 로그인 화면에 떨어지는 수법이다.
+ * 슬래시로 시작해도 두 번째 글자가 슬래시나 역슬래시면 브라우저는 그것을 다른
+ * 호스트 주소로 읽는다. 그래서 첫 두 글자를 같이 본다.
+ */
+function safeNext(value) {
+  const v = String(value || "");
+  // 문자 코드로 본다. 정규식에 역슬래시를 넣으면 옮겨 적다 한 겹 벗겨지기 쉽다.
+  //   47 = 슬래시,  92 = 역슬래시
+  // 첫 글자가 슬래시가 아니면 절대 주소이고, 두 번째까지 슬래시/역슬래시면
+  // "//남의사이트" 처럼 브라우저가 다른 호스트로 읽는다. 둘 다 거른다.
+  const second = v.charCodeAt(1);
+  if (v.charCodeAt(0) !== 47 || second === 47 || second === 92) return "/";
+  return v;
+}
+
 // ── 흐름
 
 /** 구글 동의 화면으로 보낸다. state 로 CSRF 를 막는다. */
 export function begin(req, res) {
   const state = randomBytes(16).toString("base64url");
-  const next = new URL(req.url, "http://x").searchParams.get("next") || "/";
+  const next = safeNext(new URL(req.url, "http://x").searchParams.get("next"));
   setCookie(res, STATE_COOKIE, sign({ state, next, exp: Math.floor(Date.now() / 1000) + 600 }),
             { maxAge: 600, secure: isSecure(req) });
   const u = new URL(AUTH_URL);

@@ -1,5 +1,5 @@
 import { animate, stagger } from "motion";
-import { createBrowserStore, loadCareerData, requestCoach, requestEssayReview, requestRecommendation } from "./services.js";
+import { createBrowserStore, fetchMe, loadCareerData, pullUserData, pushUserData, requestCoach, requestEssayReview, requestRecommendation } from "./services.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -18,6 +18,9 @@ const experienceCategories = {
 const storedExperienceInputs = (storedAuth ? storage : session).get("experienceInputs", null);
 const state = {
   auth: storedAuth, guest: sessionStorage.getItem("nextstep.guest") === "1",
+  // server: 구글 세션으로 들어왔는가. loginAvailable: 서버에 인증이 설정돼 있는가.
+  // 둘 다 false 면 예전처럼 브라우저 저장소만 쓴다 — 그래야 설정 전에도 화면이 그대로다.
+  server: false, loginAvailable: false,
   profile: initialProfile,
   experienceInputs: storedExperienceInputs || {...emptyExperienceInputs,project:initialProfile.experiences || ""},
   experienceCategory:"certificate",
@@ -101,9 +104,41 @@ function canPersist() { if (state.auth || state.guest) return true; openAuth("�
 function savedItems() { return state.auth ? state.saved : state.guestSaved; }
 function taskItems() { return state.auth ? state.tasks : state.guestTasks; }
 function draftItems() { return state.auth ? state.drafts : state.guestDrafts; }
-function persistForSession(key, value) { (state.auth ? storage : session).set(key, value); }
+function persistForSession(key, value) { (state.auth ? storage : session).set(key, value); scheduleSync(); }
 function historyFor(jobId) { return (state.auth ? storage : session).get(`history.${jobId}`, []); }
-function saveHistory(jobId, value) { (state.auth ? storage : session).set(`history.${jobId}`, value); }
+function saveHistory(jobId, value) { (state.auth ? storage : session).set(`history.${jobId}`, value); scheduleSync(); }
+
+// ── 서버 동기화. 구글 세션으로 들어왔을 때만 돈다.
+// 브라우저 저장소가 계속 화면의 원본이고 서버는 **사본**이다. 순서를 반대로 하면
+// DB 가 잠깐 죽었을 때 화면이 같이 죽는다 — 심사 기간에 그러면 안 된다.
+let syncTimer = null;
+function snapshot() {
+  const history = {};
+  const prefix = "nextstep.history.";
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(prefix)) continue;
+    try { history[key.slice(prefix.length)] = JSON.parse(localStorage.getItem(key)); } catch {}
+  }
+  return { profile: state.profile, experienceInputs: state.experienceInputs,
+           saved: state.saved, drafts: state.drafts, tasks: state.tasks, history };
+}
+function scheduleSync() {
+  if (!state.server) return;
+  // 한 글자 칠 때마다 보내지 않는다. 입력이 멎고 1초 뒤 한 번.
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => pushUserData(snapshot()), 1000);
+}
+async function hydrate() {
+  const remote = await pullUserData();
+  if (!remote) return;                         // 신규 계정이거나 DB 가 없다 → 로컬 그대로
+  if (remote.profile) { state.profile = { ...emptyProfile, ...remote.profile }; storage.set("profile", state.profile); }
+  if (remote.experienceInputs) { state.experienceInputs = { ...emptyExperienceInputs, ...remote.experienceInputs }; storage.set("experienceInputs", state.experienceInputs); }
+  if (Array.isArray(remote.saved)) { state.saved = remote.saved; storage.set("saved", state.saved); }
+  if (remote.drafts) { state.drafts = remote.drafts; storage.set("drafts", state.drafts); }
+  if (remote.tasks) { state.tasks = remote.tasks; storage.set("tasks", state.tasks); }
+  for (const [jobId, value] of Object.entries(remote.history || {})) storage.set(`history.${jobId}`, value);
+}
 function go(route) { location.hash=route; }
 function setRoute(route) { state.route=route; render(); window.scrollTo({top:0,behavior:"smooth"}); }
 window.addEventListener("hashchange",()=>setRoute(location.hash.slice(1)||"landing"));
@@ -141,16 +176,21 @@ function landing() {
 }
 function openAuth(message="") {
   $("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div><p class="eyebrow">WELCOME TO NEXT STEP</p><h2>나의 커리어 준비 시작하기</h2></div><button id="close-modal">×</button></div>
-    ${message?`<div class="alert info">${safe(message)}</div>`:""}<form id="auth-form"><div class="form-grid">
+    ${message?`<div class="alert info">${safe(message)}</div>`:""}
+    ${state.loginAvailable?`<button type="button" id="google-login" class="button primary" style="width:100%">G&nbsp; Google 계정으로 계속하기</button>
+      <p class="landing-note" style="margin-top:14px">구글 계정으로 들어오면 프로필과 담아둔 공고, 준비 기록이 계정에 저장돼 다른 기기에서도 이어집니다.</p>`
+    :`<form id="auth-form"><div class="form-grid">
       <div class="field"><label>아이디</label><input class="input" name="id" required placeholder="nextstep24"></div><div class="field"><label>비밀번호</label><input class="input" name="password" type="password" minlength="4" required></div>
       <div class="field full"><label>이메일</label><input class="input" name="email" type="email" required placeholder="student@univ.ac.kr"></div>
       <div class="field"><label>연령</label><input class="input" name="age" inputmode="numeric" placeholder=""></div><div class="field"><label>재적 상태</label><select class="select" name="status"><option>재학</option><option>휴학</option><option>졸업 예정</option><option>졸업</option></select></div>
       <div class="field"><label>학교</label><input class="input" name="school" placeholder="예: ○○대학교"></div><div class="field"><label>전공</label><input class="input" name="major" placeholder="예: 컴퓨터공학과"></div>
     </div><button class="button primary" style="width:100%;margin-top:16px">로그인하고 시작하기</button></form>
-    <div class="social-row"><button type="button" data-social="Google">G&nbsp; Google로 계속</button><button type="button" data-social="Kakao">●&nbsp; 카카오로 계속</button></div></section></div>`;
+    <div class="social-row"><button type="button" data-social="Google">G&nbsp; Google로 계속</button><button type="button" data-social="Kakao">●&nbsp; 카카오로 계속</button></div>`}</section></div>`;
   $("#close-modal").onclick=()=>$("#modal-root").innerHTML="";
   $(".modal-backdrop").addEventListener("click",e=>{if(e.target.classList.contains("modal-backdrop"))$("#modal-root").innerHTML=""});
-  $("#auth-form").onsubmit=e=>{e.preventDefault(); const f=Object.fromEntries(new FormData(e.target)); state.auth={id:f.id,email:f.email}; state.guest=false; sessionStorage.removeItem("nextstep.guest"); state.profile={...emptyProfile,age:f.age,status:f.status,school:f.school,major:f.major};state.experienceInputs={...emptyExperienceInputs};state.experienceCategory="certificate";storage.set("auth",state.auth);storage.set("profile",state.profile);storage.set("experienceInputs",state.experienceInputs);$("#modal-root").innerHTML="";go("home");};
+  // 인증이 켜졌으면 진짜 구글로 보낸다. 안 켜졌으면 예전 데모 폼이 그대로 뜬다.
+  $("#google-login")?.addEventListener("click",()=>{location.href=`/auth/google?next=${encodeURIComponent("/"+(location.hash||"#home"))}`;});
+  if($("#auth-form"))$("#auth-form").onsubmit=e=>{e.preventDefault(); const f=Object.fromEntries(new FormData(e.target)); state.auth={id:f.id,email:f.email}; state.guest=false; sessionStorage.removeItem("nextstep.guest"); state.profile={...emptyProfile,age:f.age,status:f.status,school:f.school,major:f.major};state.experienceInputs={...emptyExperienceInputs};state.experienceCategory="certificate";storage.set("auth",state.auth);storage.set("profile",state.profile);storage.set("experienceInputs",state.experienceInputs);$("#modal-root").innerHTML="";go("home");};
   $$('[data-social]').forEach(b=>b.onclick=()=>toast(`${b.dataset.social} 로그인은 인증 서버 연결 후 사용할 수 있어요.`));
 }
 
@@ -278,11 +318,28 @@ function bindPage(){
     $('[data-edit-experience]')?.addEventListener('click',()=>{state.recommendation=null;state.recommendationMode='fit';state.targetRole='';render();});
   }
   if(state.route==='coach')bindCoach(); if(state.route==='essay')bindEssay();
-  if(state.route==='profile'){$('#profile-form').onsubmit=e=>{e.preventDefault();if(!canPersist())return;state.profile={...state.profile,...Object.fromEntries(new FormData(e.target))};persistForSession(state.auth?'profile':'guestProfile',state.profile);toast(state.auth?'프로필과 직무 추천 경험을 함께 저장했어요.':'이 브라우저 세션에 임시 저장했어요.');};$('#logout')?.addEventListener('click',()=>{storage.remove('auth');state.auth=null;state.guest=false;state.profile=emptyProfile;state.experienceInputs={...emptyExperienceInputs};state.experienceCategory='certificate';go('landing')});}
+  if(state.route==='profile'){$('#profile-form').onsubmit=e=>{e.preventDefault();if(!canPersist())return;state.profile={...state.profile,...Object.fromEntries(new FormData(e.target))};persistForSession(state.auth?'profile':'guestProfile',state.profile);toast(state.auth?'프로필과 직무 추천 경험을 함께 저장했어요.':'이 브라우저 세션에 임시 저장했어요.');};$('#logout')?.addEventListener('click',()=>{if(state.server){location.href='/auth/logout';return;}storage.remove('auth');state.auth=null;state.guest=false;state.profile=emptyProfile;state.experienceInputs={...emptyExperienceInputs};state.experienceCategory='certificate';go('landing')});}
 }
 function bindTaskToggles(job){$$('#coach-tasks input[type="checkbox"]').forEach((input,index)=>input.onchange=()=>{const tasks=taskItems();if(!tasks[job.postingId]?.[index])return;tasks[job.postingId][index].done=input.checked;persistForSession(state.auth?'tasks':'guestTasks',tasks);render();});}
 function bindCoach(){const job=state.selected||savedItems()[0];if(!job)return;$$('[data-interview-mode]').forEach(button=>button.onclick=()=>{if(location.protocol==='file:')return toast('면접은 프로젝트 서버에서 실행해야 실제 분석 API를 사용할 수 있어요.');const url=new URL('/index.html',window.location.origin);url.searchParams.set('postingId',job.postingId);url.searchParams.set('mode',button.dataset.interviewMode);window.location.assign(url.href);});bindTaskToggles(job);const ask=async(mode,message)=>{const box=$('#messages');box.insertAdjacentHTML('beforeend',`<div class="message user">${safe(message)}</div><div class="message assistant" data-wait>공고 근거를 확인하고 있어요…</div>`);const wait=$('[data-wait]');try{const history=historyFor(job.postingId);const tasks=taskItems();const out=await requestCoach({job,mode,message,profile:state.profile,currentTasks:tasks[job.postingId]||[],history});wait.textContent=out.answer;history.push({role:'user',content:message},{role:'assistant',content:out.answer});saveHistory(job.postingId,history);if(mode==='timeline'){const next=(out.nextActions||[]).map((x,i)=>({...x,id:`${Date.now()}-${i}`,done:false}));tasks[job.postingId]=next;persistForSession(state.auth?'tasks':'guestTasks',tasks);$('#coach-tasks').innerHTML=next.map(t=>`<label class="aside-item"><input type="checkbox" ${t.done?'checked':''}> <strong>${safe(t.title)}</strong>${safe(t.reason||'')}</label>`).join('');bindTaskToggles(job);}}catch(error){wait.textContent=`AI 코치 요청 실패: ${error.code||error.message}`;}box.scrollTop=box.scrollHeight;};$$('[data-agent]').forEach(b=>b.onclick=()=>ask(b.dataset.agent,'마감일까지의 준비 일정을 제안해 줘.'));$('#chat-form').onsubmit=e=>{e.preventDefault();const input=$('#chat-input'),value=input.value.trim();if(value){input.value='';ask('consultation',value);}};}
 function bindEssay(){const job=state.selected||savedItems()[0];$('#essay-form').onsubmit=async e=>{e.preventDefault();const sections=$$('.essay-question').map((q,i)=>({question:q.value,answer:$$('.essay-answer')[i].value}));const drafts=draftItems();drafts[job.postingId]=sections;persistForSession(state.auth?'drafts':'guestDrafts',drafts);$('#essay-review').innerHTML='<div class="aside-item">AI 채용담당자가 초안을 읽고 있어요…</div>';try{const out=await requestEssayReview({job,sections,experiences:(state.profile.experiences||'').split(/\n+/)});const labels={strong:['강점','mint'],weak:['보완 필요','sun'],missing:['추가 작성 필요','coral']};$('#essay-review').innerHTML=out.items.map(x=>`<article class="review-item"><span class="badge ${labels[x.status]?.[1]||'sun'}">${labels[x.status]?.[0]||'검토'}</span><h4>${safe(x.label)}</h4><p>${safe(x.feedback)} ${safe(x.suggestion||'')}</p></article>`).join('');}catch(error){$('#essay-review').innerHTML=`<div class="alert error">자소서 심사 요청 실패: ${safe(error.code||error.message)}</div>`;}};}
 
 async function loadData(){try{const data=await loadCareerData();state.live=data.postings;state.contexts=data.contexts;state.dataSource=data.source;state.loadError='';}catch(error){state.live=[];state.contexts=[];state.dataSource='error';state.loadError=`공고 데이터를 불러오지 못했습니다: ${error.code||error.message}`;}render();}
-render(); if(state.route!=="landing")loadData(); else loadData();
+// 첫 화면을 그리기 전에 로그인 상태부터 확인한다. 나중에 확인하면 로그인한 사람이
+// 랜딩으로 한 번 튕겼다가 들어오게 된다(262번 줄의 가드 때문).
+async function boot(){
+  const me=await fetchMe();
+  state.loginAvailable=!!me.login;
+  if(me.user){
+    state.auth={id:me.user.name||(me.user.email||"").split("@")[0]||"회원",email:me.user.email||""};
+    state.server=true; state.guest=false;
+    sessionStorage.removeItem("nextstep.guest");
+    storage.set("auth",state.auth);
+    await hydrate();
+  }
+  // 인증 실패는 /?auth_error=... 로 돌아온다. 한 번 보여주고 주소에서 지운다.
+  const failed=new URL(location.href).searchParams.get("auth_error");
+  render(); loadData();
+  if(failed){toast(failed);history.replaceState(null,"",location.pathname+location.hash);}
+}
+boot();
