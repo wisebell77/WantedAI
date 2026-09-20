@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { runCareerCoachAgent } from "./upstage-career-coach.js";
+import * as auth from "./auth.mjs";
+import * as db from "./db.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dist = join(root, "dist");
@@ -532,6 +534,67 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 503, { error: error.message.startsWith("MEDIAPIPE_") ? error.message : "INTERVIEW_PROCESSING_UNAVAILABLE" });
       }
     }
+    // ── 로그인 · 사용자 데이터
+    //
+    // 설정이 없으면 이 구간만 503 이고 나머지는 그대로 돈다. 심사 기간에
+    // DB 하나 때문에 진단·공고·코치까지 죽는 건 말이 안 된다.
+    if (url.pathname.startsWith("/auth/") || url.pathname.startsWith("/api/v1/me")) {
+      if (!auth.configured()) {
+        if (url.pathname === "/api/v1/me") return sendJson(res, 200, { user: null, login: false });
+        return sendJson(res, 503, { error: "AUTH_NOT_CONFIGURED" });
+      }
+      if (req.method === "GET" && url.pathname === "/auth/google") return auth.begin(req, res);
+      if (req.method === "GET" && url.pathname === "/auth/google/callback") {
+        if (!(await db.available())) return sendJson(res, 503, { error: "DB_UNAVAILABLE", detail: db.lastErrorMessage() });
+        return auth.callback(req, res, (claims) => db.upsertUser(claims));
+      }
+      if (url.pathname === "/auth/logout") return auth.logout(req, res);
+
+      const me = auth.session(req);
+      // 로그인 여부 확인은 세션만 보면 된다. DB 를 안 건드리므로 DB 가 죽어도 답한다.
+      if (req.method === "GET" && url.pathname === "/api/v1/me") {
+        return sendJson(res, 200, { user: me ? { email: me.email, name: me.name } : null, login: true });
+      }
+      if (!me) return sendJson(res, 401, { error: "LOGIN_REQUIRED" });
+      if (!(await db.available())) return sendJson(res, 503, { error: "DB_UNAVAILABLE", detail: db.lastErrorMessage() });
+      const uid = me.uid;
+
+      if (url.pathname === "/api/v1/me/profile") {
+        if (req.method === "GET") return sendJson(res, 200, { profile: await db.getProfile(uid) });
+        if (req.method === "PUT") { await db.putProfile(uid, await readJson(req)); return sendJson(res, 200, { ok: true }); }
+      }
+      if (url.pathname === "/api/v1/me/saved") {
+        if (req.method === "GET") return sendJson(res, 200, { items: await db.listSaved(uid) });
+        if (req.method === "POST") {
+          const b = await readJson(req);
+          if (!b.postingId) return sendJson(res, 422, { error: "POSTING_ID_REQUIRED" });
+          await db.addSaved(uid, b.postingId, b.data || {});
+          return sendJson(res, 200, { ok: true });
+        }
+        if (req.method === "DELETE") {
+          const id = url.searchParams.get("postingId");
+          if (!id) return sendJson(res, 422, { error: "POSTING_ID_REQUIRED" });
+          await db.removeSaved(uid, id);
+          return sendJson(res, 200, { ok: true });
+        }
+      }
+      if (url.pathname === "/api/v1/me/drafts") {
+        if (req.method === "GET") return sendJson(res, 200, { drafts: await db.listDrafts(uid) });
+        if (req.method === "PUT") {
+          const b = await readJson(req);
+          if (!b.postingId) return sendJson(res, 422, { error: "POSTING_ID_REQUIRED" });
+          await db.putDraft(uid, b.postingId, b.data || {});
+          return sendJson(res, 200, { ok: true });
+        }
+      }
+      // 사용자가 지워 달라고 하면 전부 지운다. 남겨 둘 이유가 없다.
+      if (req.method === "DELETE" && url.pathname === "/api/v1/me") {
+        await db.deleteUser(uid);
+        return auth.logout(req, res);
+      }
+      return sendJson(res, 404, { error: "not found" });
+    }
+
     const requested = url.pathname === "/" ? "/next-step.html" : url.pathname;
     const filePath = normalize(join(dist, requested));
     if (!filePath.startsWith(dist)) return sendJson(res, 403, { error: "FORBIDDEN" });

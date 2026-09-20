@@ -69,6 +69,12 @@ RUN mkdir -p /app/models && cd /app/models \
  && ls -l /app/models
 
 # ── 코드
+# 런타임 npm 의존성. 지금은 pg 하나뿐이다 — 세션은 서명 쿠키라 라이브러리가 없고,
+# 프론트 번들은 1단계에서 끝나 여기선 필요 없다.
+# --omit=dev 로 esbuild 는 빼고, 번들에 들어간 motion 도 런타임에는 안 쓴다.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+
 COPY server/ /app/server/
 COPY persona/ /app/persona/
 COPY --from=frontend /build/dist/ /app/dist/
