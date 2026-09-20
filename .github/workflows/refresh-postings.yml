@@ -32,7 +32,15 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # **여기가 터지면 안 된다.** job 타임아웃은 취소로 끝나고, 취소되면 post 스텝이
+    # 건너뛰어져 캐시가 저장되지 않는다 — 2차 실행에서 ②③ 이 성공했는데도 받은
+    # 걸 전부 잃었다. GitHub 기본값도 6시간이라 원래 여유가 있었는데 60분으로
+    # 조여 둔 게 화근이었다.
+    #
+    # 실제 제어는 **단계별 timeout** 이 한다. 그건 그 스텝만 끝내고 job 은 계속돼
+    # 캐시도 남고 ⑦~⑨ 도 돈다. 여기 값은 무언가 정말 멈췄을 때만 걸리는 최후 방어선이다.
+    #   단계 합계 ② 30 + ③ 120 + ④ 45 + ⑤ 25 + ⑥ 40 = 260분 (+ 준비 6분)
+    timeout-minutes: 330
 
     env:
       # 파이썬이 출력을 버퍼링하면 진행 로그가 안 보인다. 첫 실행에서 브라우저
@@ -118,20 +126,21 @@ jobs:
         # 시간 상한을 둔다. 대상이 수백 건이라 상한이 없으면 이 단계가
         # job 전체를 먹고 병합·커밋까지 못 간다. 받은 만큼은 캐시에 남아
         # 다음 실행이 이어받으므로 중간에 끊겨도 손해가 없다.
-        run: timeout 900 python scripts/fetch_jd.py || echo '시간 상한 — 받은 만큼만 쓰고 넘어간다'
+        run: timeout 1800 python scripts/fetch_jd.py || echo '시간 상한 — 받은 만큼만 쓰고 넘어간다'
 
       - name: ③ 본문 수집 (브라우저 렌더링)
         continue-on-error: true
-        # 브라우저 렌더링이라 건당 10~20초다. 464건이면 90분이 넘는다.
-        run: timeout 1200 python scripts/fetch_jd_js.py || echo '시간 상한 — 받은 만큼만 쓰고 넘어간다'
+        # 브라우저 렌더링이라 건당 10~20초다. 464건이면 2시간쯤 걸린다.
+        # 한 번에 다 받게 두되, 정말 멈추면 2시간에서 끊는다.
+        run: timeout 7200 python scripts/fetch_jd_js.py || echo '시간 상한 — 받은 만큼만 쓰고 넘어간다'
 
       - name: ④ 이미지형 공고 판별
         continue-on-error: true
-        run: timeout 900 python scripts/probe_images.py || echo '시간 상한 — 판별된 만큼만'
+        run: timeout 2700 python scripts/probe_images.py || echo '시간 상한 — 판별된 만큼만'
 
       - name: ⑤ 판독용 조각 준비
         continue-on-error: true
-        run: timeout 600 python scripts/ocr_prep.py || echo '시간 상한 — 준비된 만큼만'
+        run: timeout 1500 python scripts/ocr_prep.py || echo '시간 상한 — 준비된 만큼만'
 
       - name: ⑥ 이미지 판독 (비전 모델)
         if: ${{ !inputs.skip_ocr }}
@@ -142,7 +151,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_FAST_MODEL: ${{ vars.LLM_FAST_MODEL }}
-        run: timeout 900 python scripts/ocr_read.py || echo '시간 상한 — 판독된 만큼만'
+        run: timeout 2400 python scripts/ocr_read.py || echo '시간 상한 — 판독된 만큼만'
 
       - name: ⑦ 병합 + 직무 분해
         run: |
