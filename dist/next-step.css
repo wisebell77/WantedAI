@@ -162,3 +162,10 @@ button.calendar-entry{margin:0;padding:0;border:0;background:none;box-shadow:non
   .input-stage .experience-col-head p{white-space:normal}
   .input-stage .experience-side .experience-tab{width:auto}
 }
+
+/* 내 공고함 카드의 빼기 버튼.
+   동작이 '빼기' 하나뿐이라 ... 메뉴 대신 직접 버튼을 둔다 — 메뉴는 한 동작에
+   클릭이 두 번이고 지금 고를 것이 없다. 메모·알림이 붙으면 그때 메뉴로 바꾼다. */
+.card-remove{margin-left:4px;flex:none;border:0;background:transparent;color:#9aa8bd;font-size:18px;line-height:1;border-radius:9px;display:grid;place-items:center;min-width:32px;min-height:32px;transition:background .15s,color .15s}
+.card-remove:hover{background:#fdecec;color:#d9534f}
+.card-remove:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
