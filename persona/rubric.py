@@ -170,12 +170,12 @@ def build_rubric(doc: RoleDoc, use_llm: bool = True) -> dict:
         it["weight"] = round(it["weight"] / total, 3) if total else 0
 
     focus = [it["label"] for it in sorted(items, key=lambda x: -x["weight"])[:3]]
-    persona_role = doc.role if doc.role and doc.role != doc.corp else (doc.post_title or doc.job)
+    persona_role = doc.persona_role
     persona = {
-        "name": f"{doc.corp} {persona_role} 채용담당자",
+        "name": " ".join(x for x in (doc.corp, persona_role, "채용담당자") if x),
         "focus": focus,
         "system_prompt": (
-            f"당신은 {doc.corp}의 '{doc.role or doc.job}' 채용담당자다. 공고와 채점표에 적힌 기준으로만 판단한다. "
+            f"당신은 {doc.corp}의 '{persona_role or '해당 공고'}' 채용담당자다. 공고와 채점표에 적힌 기준으로만 판단한다. "
             f"특히 {', '.join(focus)}을(를) 본다. 지원자에게 없는 경험을 가정하지 않고, "
             "합격 가능성·성격·외모 등은 평가하지 않는다. 정중하지만 구체적으로 묻는다."),
     }

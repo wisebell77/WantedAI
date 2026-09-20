@@ -35,6 +35,55 @@ from overlap.config import PATHS                         # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 
+# ── 직무 추천(NCS 소분류) ↔ 실시간 공고(민간 13분류) 이름 맞추기
+#
+# 화면에서 두 축의 이름이 달라 같은 직무인지 알 수 없었다.
+#     직무 추천   법무 · 홍보·광고 · 문화예술경영   (NCS 소분류)
+#     실시간 공고  생산/품질 · 연구개발             (민간 자체 13분류)
+#
+# 기준은 overlap/evaluate/cross.py 의 GOLD(민간 분류 → 허용 NCS 대분류)다.
+# 그 표를 불러올 수 있으면 원본을 쓰고, 못 불러오면 아래 사본(2026-09-20)을 쓴다.
+# GOLD 자체는 추천 정확도 평가 대상을 정하는 데도 쓰이므로 건드리지 않는다.
+# 표에 없는 대분류(법률·보건·교육·서비스 계열)만 _EXTRA_FAMILY 로 채운다 — 팀 확인 필요.
+_GOLD_FALLBACK = {
+    "개발/SW": {"20"}, "데이터/AI": {"20"}, "IT인프라/보안": {"20"},
+    "경영지원": {"02", "01"}, "생산/품질": {"15", "16", "17", "19"},
+    "안전/환경": {"23"}, "영업/마케팅": {"10", "02"}, "건설/플랜트": {"14"},
+    "물류/SCM": {"09", "02"}, "연구개발": {"15", "16", "17", "19", "20"},
+    "디자인": {"08"},
+}
+try:                                                     # 원본이 있으면 원본 우선
+    from overlap.evaluate.cross import GOLD as _GOLD     # noqa: E402
+except Exception:                                        # pragma: no cover
+    _GOLD = _GOLD_FALLBACK
+
+_EXTRA_FAMILY = {"04": ["교육/공공"], "05": ["경영지원"], "06": ["연구개발"],
+                 "11": ["고객/서비스"], "12": ["고객/서비스"], "13": ["고객/서비스"]}
+# 한 대분류에 여러 민간 분류가 걸릴 때 화면·필터에 쓸 대표값
+_PRIMARY_FAMILY = {"01": "경영지원", "02": "경영지원", "08": "디자인", "09": "물류/SCM",
+                   "10": "영업/마케팅", "14": "건설/플랜트", "15": "생산/품질",
+                   "16": "생산/품질", "17": "생산/품질", "19": "생산/품질",
+                   "20": "개발/SW", "23": "안전/환경"}
+
+MAJOR_TO_FAMILY: dict[str, list[str]] = {}
+for _job, _codes in _GOLD.items():
+    for _code in _codes:
+        MAJOR_TO_FAMILY.setdefault(_code, []).append(_job)
+for _code, _jobs in _EXTRA_FAMILY.items():
+    MAJOR_TO_FAMILY.setdefault(_code, []).extend(_jobs)
+
+
+def job_families(code: str) -> list[str]:
+    """NCS 소분류 코드 → 민간 직무군 목록 (대분류 앞 2자리 기준)."""
+    return MAJOR_TO_FAMILY.get((code or "")[:2], [])
+
+
+def job_family(code: str) -> str:
+    """대표 민간 직무군 하나. 실시간 공고 필터에 그대로 넘길 값."""
+    fam = job_families(code)
+    pick = _PRIMARY_FAMILY.get((code or "")[:2], "")
+    return pick if pick in fam else (fam[0] if fam else "")
+
 PRESETS = {
     "데이터분석": "교내 학술동아리에서 공공데이터 30만 행을 파이썬으로 정리하고 시각화했다\n"
               "설문 300건을 수집해 교차분석하고 결과를 보고서로 정리했다\n"
@@ -83,6 +132,7 @@ class Engine:
 
     def _match(self, m) -> dict:
         return {"code": m.code, "name": m.name, "units": m.units,
+                "jobFamily": job_family(m.code), "jobFamilies": job_families(m.code),
                 "institutions": m.institutions, "sentence": m.sentence(),
                 "description": m.description,
                 "abilities": self._units(m.code),

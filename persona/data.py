@@ -11,11 +11,22 @@ import json
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+import re
 from functools import lru_cache
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.getenv("OVERLAP_DATA_DIR", os.path.join(ROOT, "data", "overlap"))
 MAX_TEXT = 6000  # LLM 입력 상한
+
+
+# roles.json 의 직무명이 표 조각으로 깨져 들어온 경우(‘* 상세한’, ‘담당업무 및 필요스킬’ 등)
+_BAD_ROLE = re.compile(r"^[*※\-·\s]|담당\s*업무|필요\s*스킬|상세|어학|유효\s*기준|전형|접수|학력|전공|직급|세부|[:：]")
+
+
+def clean_role(name: str | None) -> str:
+    """roles.json 직무명이 표 조각으로 깨져 들어온 경우 빈 문자열을 준다."""
+    name = (name or "").strip()
+    return "" if len(name) < 3 or _BAD_ROLE.search(name) else name
 
 
 @dataclass
@@ -31,9 +42,21 @@ class RoleDoc:
     text: str = ""
     sliced: bool = False  # 공고 본문에서 이 직무 구간만 잘라냈는지
 
+    @property
+    def display_role(self) -> str:
+        """화면에 쓸 직무 이름. 깨진 이름이면 공고 제목, 그것도 아니면 직무군."""
+        return clean_role(self.role) or clean_role(self.post_title) or self.job or ""
+
+    @property
+    def persona_role(self) -> str:
+        """페르소나 이름에 쓸 짧은 직무 이름. 공고 제목보다 직무군이 읽기 좋다."""
+        job = "" if self.job in ("", "분류불가") else self.job
+        return clean_role(self.role) or job or clean_role(self.post_title) or ""
+
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in
-                ("role_id", "corp", "post_title", "role", "job", "tier", "url", "techs")}
+                ("role_id", "corp", "post_title", "role", "job", "tier", "url", "techs")} | {
+            "display_role": self.display_role}
 
 
 def _load(name: str):
