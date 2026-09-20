@@ -21,6 +21,10 @@ on:
         description: "이미지 판독을 건너뛴다 (LLM 키 없이 돌릴 때)"
         type: boolean
         default: false
+      ocr_limit:
+        description: "판독할 공고 수 상한 (0 = 제한 없음). 크레딧이 빠듯하면 줄인다"
+        type: string
+        default: "0"
 
 concurrency:                      # 앞 실행이 아직 돌면 새로 시작하지 않는다
   group: refresh-postings
@@ -100,6 +104,13 @@ jobs:
           # 한글 폴더명이 깨진 채 커밋돼 있어 그대로 따옴표로 참조한다.
           cp 'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/jd_good.json' data/ 2>/dev/null || true
           cp 'data/overlap/#Ubbfc#Uac04#Uacf5#Uace0/corpus.json'  data/ 2>/dev/null || true
+          # **판독 결과는 레포에서 되살린다.** ⑥ 은 돈이 드는 단계라 캐시만 믿으면
+          # 안 된다 — 2차 실행이 취소되면서 캐시가 날아갔고, 그대로 두면 이미 읽은
+          # 90건을 다시 읽어 $4.5 를 또 쓸 뻔했다. 캐시에 더 최신 것이 있으면 그게 이긴다.
+          cp -n data/overlap/ocr/*.json data/ocr/ 2>/dev/null || true
+          cp -n data/overlap/ocr_manifest.json data/ 2>/dev/null || true
+          cp -n data/overlap/imgprobe.json     data/ 2>/dev/null || true
+          echo "판독 완료분 $(ls data/ocr/*.json 2>/dev/null | wc -l)건 복원"
           ls -la data/ | head -20
 
       - name: ① 공채속보 목록 갱신
@@ -155,7 +166,13 @@ jobs:
           LLM_FAST_MODEL: ${{ vars.LLM_FAST_MODEL }}
         # 상한을 두지 않는다. 공고 단위로 저장하므로 중간에 끊겨도 손해는 없지만,
         # API 호출이라 다시 돌리면 그만큼 크레딧을 또 쓴다. 한 번에 끝내는 게 낫다.
-        run: python scripts/ocr_read.py
+        run: |
+          LIMIT='${{ inputs.ocr_limit }}'
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != '0' ]; then
+            python scripts/ocr_read.py --limit "$LIMIT"
+          else
+            python scripts/ocr_read.py
+          fi
 
       - name: ⑦ 병합 + 직무 분해
         run: |
@@ -196,6 +213,19 @@ jobs:
               shutil.copyfile(src, dst)
               print(f"  반영    {dst}  {nd} → {ns}건")
 
+          # 새로 판독한 것을 배포본으로 옮긴다. 여기 있어야 다음 실행이 되살린다.
+          import glob, os
+          os.makedirs("data/overlap/ocr", exist_ok=True)
+          moved = 0
+          for f in glob.glob("data/ocr/*.json"):
+              dst = os.path.join("data/overlap/ocr", os.path.basename(f))
+              if not os.path.exists(dst) or os.path.getsize(f) != os.path.getsize(dst):
+                  shutil.copyfile(f, dst); moved += 1
+          for f in ("ocr_manifest.json", "imgprobe.json"):
+              if os.path.exists(f"data/{f}"):
+                  shutil.copyfile(f"data/{f}", f"data/overlap/{f}")
+          print(f"  판독 결과 {moved}건 반영 (누적 {len(glob.glob('data/overlap/ocr/*.json'))}건)")
+
           g = json.load(open("data/overlap/gongchae_all.json", encoding="utf-8"))
           t = datetime.date.today().strftime("%Y%m%d")
           live = [x for x in g if str(x.get("empWantedEndt", "")) >= t]
@@ -212,6 +242,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # 배포본만 커밋한다. data/jd 같은 캐시는 actions/cache 에 남는다.
+          # 판독 결과(data/ocr)도 배포본 안에 있으므로 같이 커밋된다.
+          # 다음 실행이 이걸 되살려 같은 공고를 다시 읽지 않는다.
           git add data/overlap
           if git diff --cached --quiet; then
             echo "바뀐 것이 없다. 커밋하지 않는다."
