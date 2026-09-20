@@ -8,16 +8,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from persona import InterviewSession, build_rubric, llm, review_letter
-from persona.data import load_roles
+from persona.data import RoleDoc, load_roles
 from persona.grounding import verify_quote
 
 
 def build_for_posting(posting):
-    docs = [doc for doc in load_roles(tier=None, min_len=0) if doc.url == posting["sourceUrl"]]
+    url = (posting.get("sourceUrl") or "").strip()
+    docs = [doc for doc in load_roles(tier=None, min_len=0) if url and doc.url == url]
     index = int(posting.get("personaRoleIndex", 0))
-    if index >= len(docs):
-        raise ValueError("PERSONA_POSTING_NOT_FOUND")
-    doc = docs[index]
+    doc = docs[index] if index < len(docs) else _doc_from_text(posting)
     rubric_path = Path(__file__).resolve().parent.parent / "out" / "rubrics" / f"{doc.role_id}.json"
     rubric = None
     if rubric_path.exists():
@@ -32,6 +31,29 @@ def build_for_posting(posting):
     while question := session.next_question():
         questions.append(question)
     return {"rubric": rubric, "questions": questions}
+
+
+def _doc_from_text(posting):
+    """사용자가 직접 등록한 공고를 문서로 만든다.
+
+    수집본(roles.json)에 없는 공고다. 루브릭은 항목마다 공고 원문을 인용하고
+    verify_quote 로 그 인용이 본문에 실제로 있는지 확인하므로, 붙여 넣은 원문을
+    그대로 text 에 넣어야 한다. 요약하거나 다듬으면 인용 검증이 깨진다.
+    """
+    text = chr(10).join(posting.get("responsibilities") or []).strip()
+    if not text:
+        raise ValueError("PERSONA_POSTING_NOT_FOUND")
+    return RoleDoc(
+        role_id=str(posting.get("postingId") or "user"),
+        corp=posting.get("companyName") or "",
+        post_title=posting.get("postingTitle") or posting.get("positionTitle") or "",
+        role=posting.get("positionTitle") or "",
+        job=posting.get("jobFamily") or "",
+        tier="",
+        url=posting.get("sourceUrl") or "",
+        techs=list(posting.get("requiredSkills") or []),
+        text=text,
+    )
 
 
 def evaluate(rubric, item_id, answer, followup_answer=""):

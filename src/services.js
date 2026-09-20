@@ -24,12 +24,20 @@ export async function requestRecommendation(text) {
   return fetchJson("/api/recommend", { method:"POST",headers:jsonHeaders,body:JSON.stringify({ texts:text.split(/\n+/).filter(Boolean),target:"",limit:5 }) });
 }
 
+// 직접 등록한 공고는 서버의 수집본에 없다. 공고 내용을 같이 보내야
+// AI 코치가 무엇을 보고 답하는지 알 수 있다. 서버가 크기를 잘라 받는다.
+const jobContextOf = (job) => job?.userAdded ? {
+  companyName:job.companyName, positionTitle:job.positionTitle, postingTitle:job.postingTitle,
+  jobFamily:job.jobFamily, deadline:job.deadline, sourceUrl:job.sourceUrl,
+  requiredSkills:job.requiredSkills||[], responsibilities:job.responsibilities||[]
+} : undefined;
+
 export async function requestCoach({ job, mode, message, profile, currentTasks, history }) {
-  return fetchJson("/api/v1/agent/chat", { method:"POST",headers:jsonHeaders,body:JSON.stringify({ postingId:job.postingId,mode,message,userProfile:{ experience:profile.experiences || "경험 미입력",deadline:job.deadline },currentTasks,history }) });
+  return fetchJson("/api/v1/agent/chat", { method:"POST",headers:jsonHeaders,body:JSON.stringify({ postingId:job.postingId,jobContext:jobContextOf(job),mode,message,userProfile:{ experience:profile.experiences || "경험 미입력",deadline:job.deadline },currentTasks,history }) });
 }
 
 export async function requestEssayReview({ job, sections, experiences }) {
-  return fetchJson("/api/v1/essays/review", { method:"POST",headers:jsonHeaders,body:JSON.stringify({ postingId:job.postingId,sections,experiences }) });
+  return fetchJson("/api/v1/essays/review", { method:"POST",headers:jsonHeaders,body:JSON.stringify({ postingId:job.postingId,jobContext:jobContextOf(job),sections,experiences }) });
 }
 
 export function createBrowserStore(type) {

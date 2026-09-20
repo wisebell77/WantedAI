@@ -251,6 +251,50 @@ async function runPersonaBridge(input) {
 }
 const validModes = new Set(["timeline", "task_prioritization", "jd_tagging", "cover_letter_guide", "consultation", "interview_feedback"]);
 const interviewPersonas = new Map();
+
+// ── 사용자가 직접 등록한 공고
+//
+// 수집본(contexts)에 없으므로 공고 내용을 요청에 담아 보낸다. 서버에 따로
+// 저장하지 않는 이유는, 담아둔 공고가 이미 사용자 문서로 Postgres 에 동기화
+// 되기 때문이다 — 테이블을 하나 더 만들 이유가 없다.
+//
+// 값은 그대로 LLM 프롬프트로 간다. 자기 세션에 자기 텍스트를 넣는 것이라
+// message·experience 로 이미 할 수 있는 것과 다르지 않지만, **크기는 막는다.**
+// 길이 제한이 없으면 한 번의 요청으로 토큰을 얼마든지 태울 수 있다.
+function userJobContext(input) {
+  const j = input?.jobContext;
+  if (!j || typeof j !== "object") return null;
+  if (!String(input.postingId || "").startsWith("user-")) return null;
+  const str = (v, n) => String(v ?? "").slice(0, n);
+  const list = (v, n, len) => (Array.isArray(v) ? v : [])
+    .slice(0, n).map((x) => str(x, len).trim()).filter(Boolean);
+  const title = str(j.positionTitle, 200).trim();
+  if (!title) return null;
+  const url = str(j.sourceUrl, 500);
+  const deadline = str(j.deadline, 10);
+  return {
+    postingId: str(input.postingId, 80),
+    companyName: str(j.companyName, 120).trim() || "직접 등록한 공고",
+    positionTitle: title,
+    postingTitle: str(j.postingTitle, 200).trim() || title,
+    jobFamily: str(j.jobFamily, 60),
+    tier: "",
+    responsibilities: list(j.responsibilities, 12, 1500),
+    requiredSkills: list(j.requiredSkills, 30, 60),
+    preferredSkills: list(j.preferredSkills, 30, 60),
+    sourceUrl: /^https?:\/\//.test(url) ? url : "",
+    personaRoleIndex: 0,
+    deadline: /^\d{4}-\d{2}-\d{2}$/.test(deadline) ? deadline : null,
+    sourceType: "user"
+  };
+}
+// 수집 공고를 먼저 보고, 없으면 사용자가 보낸 것을 쓴다.
+const findJobContext = (input) =>
+  contexts.find((row) => row.postingId === input.postingId) || userJobContext(input);
+
+// 사용자 공고의 페르소나는 캐시하지 않는다. postingId 를 클라이언트가 만들기
+// 때문에 같은 id 를 쓰는 다른 사용자에게 남의 결과가 나갈 수 있다.
+const isUserPosting = (id) => String(id || "").startsWith("user-");
 async function evaluateInterviewTranscript(postingId, job, question, itemId, transcript) {
   let persona = interviewPersonas.get(postingId);
   if (!persona) {
@@ -414,7 +458,7 @@ const server = createServer(async (req, res) => {
       if (!llmKey()) return sendJson(res, 503, { error: "LLM_API_KEY_MISSING" });
       const input = await readJson(req);
       if (!validModes.has(input.mode)) return sendJson(res, 422, { error: "VALID_AGENT_MODE_REQUIRED" });
-      const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
+      const canonicalJob = findJobContext(input);
       if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
       if (!input.userProfile?.experience?.trim()) return sendJson(res, 422, { error: "USER_EXPERIENCE_REQUIRED" });
       if (!input.message?.trim()) return sendJson(res, 422, { error: "MESSAGE_REQUIRED" });
@@ -432,15 +476,15 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/v1/agent/interview-feedback") {
       const input = await readJson(req);
-      const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
+      const canonicalJob = findJobContext(input);
       if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
       if (!input.question?.trim()) return sendJson(res, 422, { error: "QUESTION_REQUIRED" });
       if (!input.transcript?.trim()) return sendJson(res, 422, { error: "TRANSCRIPT_REQUIRED" });
       try {
-        let persona = interviewPersonas.get(input.postingId);
+        let persona = isUserPosting(input.postingId) ? null : interviewPersonas.get(input.postingId);
         if (!persona) {
           persona = await runPersonaBridge({ action: "persona", posting: canonicalJob });
-          interviewPersonas.set(input.postingId, persona);
+          if (!isUserPosting(input.postingId)) interviewPersonas.set(input.postingId, persona);
         }
         if (!persona.rubric.items.length || !persona.questions.length) return sendJson(res, 422, { error: "JOB_RUBRIC_UNAVAILABLE" });
         const itemId = input.itemId || persona.questions[0]?.item_id;
@@ -470,15 +514,15 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/v1/essays/review") {
       const input = await readJson(req);
-      const canonicalJob = contexts.find((row) => row.postingId === input.postingId);
+      const canonicalJob = findJobContext(input);
       if (!canonicalJob) return sendJson(res, 422, { error: "VALID_POSTING_ID_REQUIRED" });
       const letter = (input.sections || []).map((item) => `${item.question || ""}\n${item.answer || ""}`).join("\n\n").trim();
       if (!letter) return sendJson(res, 422, { error: "ESSAY_REQUIRED" });
       try {
-        let persona = interviewPersonas.get(input.postingId);
+        let persona = isUserPosting(input.postingId) ? null : interviewPersonas.get(input.postingId);
         if (!persona) {
           persona = await runPersonaBridge({ action: "persona", posting: canonicalJob });
-          interviewPersonas.set(input.postingId, persona);
+          if (!isUserPosting(input.postingId)) interviewPersonas.set(input.postingId, persona);
         }
         const result = await runPersonaBridge({ action: "review", rubric: persona.rubric, letter, experiences: input.experiences || [] });
         return sendJson(res, 200, result);

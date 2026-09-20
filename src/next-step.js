@@ -28,6 +28,8 @@ const state = {
   guestSaved: session.get("guestSaved", []), guestDrafts: session.get("guestDrafts", {}), guestTasks: session.get("guestTasks", {}),
   live: [], contexts: [], dataSource:"loading", loadError:"", selected: null, recommendation: null,
   recommendationMode:"fit", targetRole:"", route: location.hash.slice(1) || "landing",
+  // 직무 추천에서 넘어온 NCS 코드. 공고 목록을 그 계열로 좁힌다.
+  ncsFilter: null,
   calendarCursor:new Date(new Date().getFullYear(),new Date().getMonth(),1), selectedCalendarDate:null
 };
 const icon = { home:"⌂", recommend:"✦", jobs:"▤", coach:"◈", profile:"○" };
@@ -194,6 +196,50 @@ function openAuth(message="") {
   $$('[data-social]').forEach(b=>b.onclick=()=>toast(`${b.dataset.social} 로그인은 인증 서버 연결 후 사용할 수 있어요.`));
 }
 
+// 공고 직접 등록.
+//
+// **OCR 커버리지가 낮은 것을 사용자가 직접 우회하는 길이다.** 이미지로만 된
+// 공고는 본문을 못 읽어 AI 코치가 안 붙는데, 원문을 붙여 넣으면 같은 엔진으로
+// 역량을 뽑아 코치·자소서까지 그대로 이어진다.
+//
+// 서버에 따로 저장하지 않는다. 담아둔 공고가 이미 사용자 문서로 동기화되고,
+// 요청할 때 공고 내용을 같이 보내면 서버가 그걸로 답한다.
+function openManualPosting() {
+  $("#modal-root").innerHTML=`<div class="modal-backdrop"><section class="modal"><div class="modal-head"><div><p class="eyebrow">ADD POSTING</p><h2>공고 직접 등록</h2></div><button id="close-modal">×</button></div>
+    <div class="hint">공고 원문을 붙여 넣으면 요구 역량을 뽑아 AI 코치와 자소서 검토까지 이어집니다. 이미지로만 올라온 공고도 이렇게 쓸 수 있어요. 등록한 공고는 내 공고함에만 있고 다른 사람에게 보이지 않습니다.</div>
+    <form id="manual-form"><div class="form-grid">
+      <div class="field"><label>회사명</label><input class="input" name="companyName" required placeholder="예: ○○전자"></div>
+      <div class="field"><label>직무명</label><input class="input" name="positionTitle" required placeholder="예: 데이터 분석"></div>
+      <div class="field"><label>마감일</label><input class="input" name="deadline" type="date"></div>
+      <div class="field"><label>원문 링크 (선택)</label><input class="input" name="sourceUrl" type="url" placeholder="https://"></div>
+      <div class="field full"><label>공고 원문</label><textarea class="textarea" name="body" required placeholder="주요 업무와 자격 요건을 그대로 붙여 넣으세요. 길수록 역량을 더 정확히 뽑습니다."></textarea></div>
+    </div><button class="button primary" style="width:100%;margin-top:16px" id="manual-submit">등록하고 역량 뽑기</button></form></section></div>`;
+  $("#close-modal").onclick=()=>$("#modal-root").innerHTML="";
+  $(".modal-backdrop").addEventListener("click",e=>{if(e.target.classList.contains("modal-backdrop"))$("#modal-root").innerHTML=""});
+  $("#manual-form").onsubmit=async e=>{
+    e.preventDefault();
+    if(!canPersist())return;
+    const f=Object.fromEntries(new FormData(e.target));
+    const body=(f.body||"").trim(); if(!body)return;
+    const button=$("#manual-submit"); button.disabled=true; button.textContent="역량을 뽑는 중…";
+    // 사용자 경험을 읽는 것과 같은 엔진이다. 공고 본문을 넣으면 요구 역량이 나온다.
+    let skills=[];
+    try{ skills=((await requestRecommendation(body)).nodes||[]).slice(0,8); }
+    catch(error){ toast(`역량 추출에 실패했어요 (${error.code||error.message}). 공고는 그대로 담을게요.`); }
+    const id=`user-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const item={postingId:id,externalId:id,userAdded:true,coachReady:true,
+      companyName:f.companyName.trim(),positionTitle:f.positionTitle.trim(),
+      postingTitle:f.positionTitle.trim(),jobFamily:"직접 등록",
+      deadline:f.deadline||"",sourceUrl:f.sourceUrl||"",
+      requiredSkills:skills,preferredSkills:[],responsibilities:[body]};
+    const items=savedItems(); items.push(item);
+    persistForSession(state.auth?"saved":"guestSaved",items);
+    $("#modal-root").innerHTML="";
+    toast(skills.length?`요구 역량 ${skills.length}개를 뽑아 내 공고함에 담았어요.`:"내 공고함에 담았어요.");
+    state.selected=item; go("coach");
+  };
+}
+
 function postingCard(item,{save=true,prepare=false,remove=false}={}) {
   const isSaved=savedItems().some(x=>keyOf(x)===keyOf(item));
   const status=item.coachReady?{tone:"mint",label:"AI 코치 준비 완료",title:"JD의 업무와 요구 역량이 연결되어 AI 코치·자소서·면접 기능을 사용할 수 있어요."}:item.postingId?{tone:"sun",label:"JD 상세 없음",title:"공고는 연결됐지만 AI 코치에 필요한 업무·요구 역량 정보가 부족해요."}:{tone:"coral",label:"직무 정보 미연결",title:"수집 공고와 직무 JD를 아직 연결하지 못해 AI 코치 준비를 시작할 수 없어요."};
@@ -253,9 +299,9 @@ function home() {
   </main>`);
 }
 function jobs() {
-  return shell(`<main class="page"><div class="page-head"><div><h1>실시간 공고</h1><p>실제 수집 공고 중 지금 지원 가능한 공고를 확인하고, 관심 공고를 내 공고함에 담아보세요.</p></div><button class="button secondary" id="manual-posting">+ 공고 직접 등록</button></div>${state.loadError?`<div class="alert error">${safe(state.loadError)}</div>`:""}
-    <section class="panel featured-jobs"><div class="section-head"><div><h2>추천 공고</h2><p>마감이 가깝고 AI 코치까지 연결되는 공고예요.</p></div><span class="badge ${state.dataSource==='api'?'mint':'sun'}">${state.dataSource==='api'?'실제 공고 API':'실제 공고 기반 체험 데이터'}</span></div><div class="posting-grid" id="featured-postings">${state.live.filter(x=>x.coachReady).slice(0,3).map(postingCard).join("")}</div></section>
-    <div class="section-head"><div><h2>전체 공고</h2><p>직무명과 요구 역량까지 검색하고, 마음에 드는 공고만 내 공고함에 담아보세요.</p></div></div><div class="filterbar"><input class="input" id="job-search" placeholder="기업명 · 공고명 · 직무 · 요구 역량 검색"><select class="select" id="job-filter"><option value="">전체 직무</option>${[...new Set(state.live.map(x=>x.jobFamily))].sort().map(x=>`<option>${safe(x)}</option>`).join("")}</select><select class="select" id="deadline-filter"><option value="0">전체 마감</option><option value="7">7일 이내</option><option value="14">14일 이내</option><option value="30">30일 이내</option></select><span class="result-count">${state.live.length}건</span></div><div class="posting-grid" id="all-postings">${state.live.slice(0,60).map(postingCard).join("")}</div>
+  return shell(`<main class="page"><div class="page-head"><div><h1>실시간 공고</h1><p>실제 수집 공고 중 지금 지원 가능한 공고를 확인하고, 관심 공고를 내 공고함에 담아보세요.</p></div><button class="button secondary" id="manual-posting">+ 공고 직접 등록</button></div>${state.loadError?`<div class="alert error">${safe(state.loadError)}</div>`:""}${state.ncsFilter?`<div class="alert info" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span><strong>${safe(state.ncsFilter.name)}</strong> 추천에서 넘어온 목록이에요 · ${safe(ncsMajorName(state.ncsFilter.code))} 계열 ${visibleJobs().length}건</span><button class="text-link" id="clear-ncs" style="margin-left:auto">전체 공고 보기</button></div>`:""}
+    <section class="panel featured-jobs"><div class="section-head"><div><h2>추천 공고</h2><p>마감이 가깝고 AI 코치까지 연결되는 공고예요.</p></div><span class="badge ${state.dataSource==='api'?'mint':'sun'}">${state.dataSource==='api'?'실제 공고 API':'실제 공고 기반 체험 데이터'}</span></div><div class="posting-grid" id="featured-postings">${visibleJobs().filter(x=>x.coachReady).slice(0,3).map(postingCard).join("")}</div></section>
+    <div class="section-head"><div><h2>전체 공고</h2><p>직무명과 요구 역량까지 검색하고, 마음에 드는 공고만 내 공고함에 담아보세요.</p></div></div><div class="filterbar"><input class="input" id="job-search" placeholder="기업명 · 공고명 · 직무 · 요구 역량 검색"><select class="select" id="job-filter"><option value="">전체 직무</option>${[...new Set(visibleJobs().map(x=>x.jobFamily))].sort().map(x=>`<option>${safe(x)}</option>`).join("")}</select><select class="select" id="deadline-filter"><option value="0">전체 마감</option><option value="7">7일 이내</option><option value="14">14일 이내</option><option value="30">30일 이내</option></select><span class="result-count">${visibleJobs().length}건</span></div><div class="posting-grid" id="all-postings">${visibleJobs().slice(0,60).map(postingCard).join("")}</div>
   </main>`);
 }
 function recommend() {
@@ -278,7 +324,7 @@ function renderRecommendation(result) {
   const matches=(result.matches||[]).slice(0,5);
   const target=matches.find(m=>m.name===state.targetRole)||matches[0];
   const cards=state.recommendationMode==="target"&&target?[target]:matches;
-  return `<div class="section-head"><div><h2>${state.recommendationMode==="target"?'목표 직무와 내 경험 비교':'경험에서 발견한 직무 연결'}</h2><p>${state.recommendationMode==="target"?'목표 직무를 선택해 연결된 경험 근거를 확인해요.':'점수 대신 실제로 겹친 역량과 근거를 보여드려요.'}</p></div><button class="text-link" data-edit-experience>경험 다시 입력</button></div><div class="segmented"><button class="${state.recommendationMode==='fit'?'active':''}" data-recommend-mode="fit">나에게 맞는 직무 찾기</button><button class="${state.recommendationMode==='target'?'active':''}" data-recommend-mode="target">목표 직무와 비교하기</button></div>${state.recommendationMode==="target"?`<label class="target-role-label">목표 직무<select class="select" id="target-role">${matches.map(m=>`<option ${m.name===target?.name?'selected':''}>${safe(m.name)}</option>`).join('')}</select></label>`:''}<div class="result-list">${cards.map(m=>`<article class="match-card"><h3>${safe(m.name)}</h3><p>${safe(m.sentence||m.description||"")}</p><div class="skill-row">${(m.have||[]).slice(0,5).map(h=>`<span class="skill">${safe(h.competency)}</span>`).join("")}</div>${m.have?.[0]?.quotes?.[0]?`<div class="evidence">근거 · ${safe(m.have[0].quotes[0].text)}</div>`:""}</article>`).join("")}</div><div class="form-foot"><small>지원 가능한 공고는 실시간 공고에서 확인할 수 있어요.</small><button class="button secondary" data-go="jobs">실시간 공고로 이동</button></div>`;
+  return `<div class="section-head"><div><h2>${state.recommendationMode==="target"?'목표 직무와 내 경험 비교':'경험에서 발견한 직무 연결'}</h2><p>${state.recommendationMode==="target"?'목표 직무를 선택해 연결된 경험 근거를 확인해요.':'점수 대신 실제로 겹친 역량과 근거를 보여드려요.'}</p></div><button class="text-link" data-edit-experience>경험 다시 입력</button></div><div class="segmented"><button class="${state.recommendationMode==='fit'?'active':''}" data-recommend-mode="fit">나에게 맞는 직무 찾기</button><button class="${state.recommendationMode==='target'?'active':''}" data-recommend-mode="target">목표 직무와 비교하기</button></div>${state.recommendationMode==="target"?`<label class="target-role-label">목표 직무<select class="select" id="target-role">${matches.map(m=>`<option ${m.name===target?.name?'selected':''}>${safe(m.name)}</option>`).join('')}</select></label>`:''}<div class="result-list">${cards.map(m=>`<article class="match-card"><h3>${safe(m.name)}</h3><p>${safe(m.sentence||m.description||"")}</p><div class="skill-row">${(m.have||[]).slice(0,5).map(h=>`<span class="skill">${safe(h.competency)}</span>`).join("")}</div>${m.have?.[0]?.quotes?.[0]?`<div class="evidence">근거 · ${safe(m.have[0].quotes[0].text)}</div>`:""}${(()=>{const n=ncsCount(m.code);return n?`<div style="margin-top:12px"><button class="button small secondary" data-ncs="${safe(m.code)}" data-ncs-name="${safe(m.name)}">이 직무 공고 ${n}건 보기</button><small style="margin-left:9px;color:var(--muted)">${safe(ncsMajorName(m.code))} 계열</small></div>`:`<div style="margin-top:12px"><small style="color:var(--muted)">연결된 민간 공고가 아직 없어요</small></div>`;})()}</article>`).join("")}</div><div class="form-foot"><small>지원 가능한 공고는 실시간 공고에서 확인할 수 있어요.</small><button class="button secondary" data-go="jobs">실시간 공고로 이동</button></div>`;
 }
 function coach() {
   const job=state.selected||savedItems()[0];
@@ -308,18 +354,32 @@ function render() {
 // 그래서 카드를 눌렀을 때 그 그룹의 첫 번째가 잡혀 엉뚱한 공고가 담기고
 // AI 코치도 다른 공고로 열렸다. externalId 는 347건 전부에 있고 고유하다.
 const keyOf = (item) => String(item?.externalId ?? item?.postingId ?? "");
+// 추천 직무(NCS 코드)로 공고를 좁힌다.
+// 공고마다 ncsMajors 가 서버에서 같이 오므로 다시 부르지 않는다.
+// **대분류까지만 이어진다** — 02 경영·회계·사무 안에서 마케팅과 재무를
+// 가르지 못한다. 그래서 화면에 계열 이름을 같이 띄워 오해를 막는다.
+const ncsMajorOf = (code) => String(code||"").slice(0,2);
+function ncsMatch(item){ const f=state.ncsFilter; if(!f) return true;
+  return (item.ncsMajors||[]).includes(ncsMajorOf(f.code)); }
+const visibleJobs = () => state.live.filter(ncsMatch);
+function ncsCount(code){ const m=ncsMajorOf(code);
+  return state.live.filter(x=>(x.ncsMajors||[]).includes(m)).length; }
+function ncsMajorName(code){ const m=ncsMajorOf(code);
+  const s=state.live.find(x=>(x.ncsMajors||[]).includes(m));
+  return s?(s.ncsMajorNames||[])[(s.ncsMajors||[]).indexOf(m)]||"":""; }
 function findPosting(card){const id=card?.dataset.posting;if(!id)return undefined;return state.live.find(x=>keyOf(x)===id)||savedItems().find(x=>keyOf(x)===id);}
 function bindPostingCards(root=document){$$('.posting-card',root).forEach(card=>{const item=findPosting(card); $('[data-save]',card)?.addEventListener('click',()=>{if(!item)return toast('이 공고는 직무 상세 정보가 아직 연결되지 않아 담아둘 수 없어요. 공고 원문은 바로 확인할 수 있어요.');if(!canPersist())return; const items=savedItems();const idx=items.findIndex(x=>keyOf(x)===keyOf(item));if(idx>=0)items.splice(idx,1);else items.push(item);persistForSession(state.auth?'saved':'guestSaved',items);toast(idx>=0?'내 공고함에서 뺐어요.':state.auth?'내 공고함에 담았어요.':'체험용 내 공고함에 담았어요.');render();});$('[data-coach]',card)?.addEventListener('click',()=>{state.selected=item;go('coach')});$('[data-remove]',card)?.addEventListener('click',()=>{if(!item)return;const items=savedItems();const idx=items.findIndex(x=>keyOf(x)===keyOf(item));if(idx<0)return;items.splice(idx,1);persistForSession(state.auth?'saved':'guestSaved',items);toast('내 공고함에서 뺐어요.');render();});});}
 function bindPage(){
   if(state.route==='landing'){animate($('.landing-copy'),{opacity:[0,1],y:[18,0]},{duration:.55});$('#login-button').onclick=()=>openAuth();$('#guest-button').onclick=()=>{state.guest=true;state.auth=null;state.profile=session.get('guestProfile',emptyProfile);state.experienceInputs=session.get('experienceInputs',{...emptyExperienceInputs,project:state.profile.experiences || ''});state.experienceCategory='certificate';sessionStorage.setItem('nextstep.guest','1');go('home')};return;}
   bindPostingCards(); $('#home-login')?.addEventListener('click',()=>openAuth()); $('#profile-login')?.addEventListener('click',()=>openAuth()); $('[data-focus]')?.addEventListener('click',()=>{state.selected=focusJob();go('coach')});
   const calendarCard=$('#open-calendar'); if(calendarCard){calendarCard.addEventListener('click',event=>{if(event.target.matches('input'))event.preventDefault();openCalendarModal();});calendarCard.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openCalendarModal();}});}
-  if(state.route==='jobs'){const apply=()=>{const terms=$('#job-search').value.toLowerCase().split(/\s+/).filter(Boolean),job=$('#job-filter').value,days=Number($('#deadline-filter').value);const list=state.live.filter(x=>{const searchable=`${x.companyName||""} ${x.positionTitle||""} ${x.jobFamily||""} ${(x.requiredSkills||[]).join(" ")}`.toLowerCase();return terms.every(term=>searchable.includes(term))&&(!job||x.jobFamily===job)&&(!days||daysLeft(x.deadline)<=days);});$('#all-postings').innerHTML=list.slice(0,60).map(postingCard).join('');$('.result-count').textContent=`${list.length}건`;bindPostingCards($('#all-postings'));};['#job-search','#job-filter','#deadline-filter'].forEach(s=>$(s).addEventListener('input',apply));$('#manual-posting').onclick=()=>toast('직접 등록은 공통 postingId API 합의 후 연결돼요.');}
+  if(state.route==='jobs'){const apply=()=>{const terms=$('#job-search').value.toLowerCase().split(/\s+/).filter(Boolean),job=$('#job-filter').value,days=Number($('#deadline-filter').value);const list=visibleJobs().filter(x=>{const searchable=`${x.companyName||""} ${x.positionTitle||""} ${x.jobFamily||""} ${(x.requiredSkills||[]).join(" ")}`.toLowerCase();return terms.every(term=>searchable.includes(term))&&(!job||x.jobFamily===job)&&(!days||daysLeft(x.deadline)<=days);});$('#all-postings').innerHTML=list.slice(0,60).map(postingCard).join('');$('.result-count').textContent=`${list.length}건`;bindPostingCards($('#all-postings'));};['#job-search','#job-filter','#deadline-filter'].forEach(s=>$(s).addEventListener('input',apply));$('#clear-ncs')?.addEventListener('click',()=>{state.ncsFilter=null;render();});$('#manual-posting').onclick=()=>openManualPosting();}
   if(state.route==='recommend'){
     $('#experience-input')?.addEventListener('input',event=>{state.experienceInputs[state.experienceCategory]=event.target.value;persistForSession('experienceInputs',state.experienceInputs);});
     $$('[data-experience-category]').forEach(button=>button.addEventListener('click',()=>{state.experienceInputs[state.experienceCategory]=$('#experience-input').value;persistForSession('experienceInputs',state.experienceInputs);state.experienceCategory=button.dataset.experienceCategory;render();}));
     $('#run-recommend')?.addEventListener('click',async()=>{state.experienceInputs[state.experienceCategory]=$('#experience-input').value;persistForSession('experienceInputs',state.experienceInputs);const text=Object.entries(experienceCategories).map(([key,item])=>({label:item.label,value:(state.experienceInputs[key]||'').trim()})).filter(item=>item.value).map(item=>`[${item.label}]\n${item.value}`).join('\n\n');if(!text)return toast('경험을 한 가지 이상 입력해 주세요.');state.profile.experiences=text;persistForSession(state.auth?'profile':'guestProfile',state.profile);$('.input-stage').innerHTML='<div class="alert info">경험의 근거를 분석하고 있어요.</div>';try{state.recommendation=await requestRecommendation(text);state.recommendationMode='fit';state.targetRole='';}catch(error){state.recommendation={error:`직무 추천 요청 실패: ${error.code||error.message}`};}render();});
     $$('[data-recommend-mode]').forEach(button=>button.addEventListener('click',()=>{state.recommendationMode=button.dataset.recommendMode;render();}));
+    $$('[data-ncs]').forEach(b=>b.addEventListener('click',()=>{state.ncsFilter={code:b.dataset.ncs,name:b.dataset.ncsName};go('jobs');}));
     $('#target-role')?.addEventListener('change',event=>{state.targetRole=event.target.value;render();});
     $('[data-edit-experience]')?.addEventListener('click',()=>{state.recommendation=null;state.recommendationMode='fit';state.targetRole='';render();});
   }
@@ -327,7 +387,7 @@ function bindPage(){
   if(state.route==='profile'){$('#profile-form').onsubmit=e=>{e.preventDefault();if(!canPersist())return;state.profile={...state.profile,...Object.fromEntries(new FormData(e.target))};persistForSession(state.auth?'profile':'guestProfile',state.profile);toast(state.auth?'프로필과 직무 추천 경험을 함께 저장했어요.':'이 브라우저 세션에 임시 저장했어요.');};$('#delete-account')?.addEventListener('click',async()=>{if(!confirm('계정과 저장된 기록(프로필 · 담아둔 공고 · 초안 · 대화)을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?'))return;try{await fetch('/api/v1/me',{method:'DELETE'});}catch{}for(const k of Object.keys(localStorage))if(k.startsWith('nextstep.'))localStorage.removeItem(k);sessionStorage.clear();location.href='/';});$('#logout')?.addEventListener('click',()=>{if(state.server){location.href='/auth/logout';return;}storage.remove('auth');state.auth=null;state.guest=false;state.profile=emptyProfile;state.experienceInputs={...emptyExperienceInputs};state.experienceCategory='certificate';go('landing')});}
 }
 function bindTaskToggles(job){$$('#coach-tasks input[type="checkbox"]').forEach((input,index)=>input.onchange=()=>{const tasks=taskItems();const k=keyOf(job);if(!tasks[k]?.[index])return;tasks[k][index].done=input.checked;persistForSession(state.auth?'tasks':'guestTasks',tasks);render();});}
-function bindCoach(){const job=state.selected||savedItems()[0];if(!job)return;$$('[data-interview-mode]').forEach(button=>button.onclick=()=>{if(location.protocol==='file:')return toast('면접은 프로젝트 서버에서 실행해야 실제 분석 API를 사용할 수 있어요.');const url=new URL('/index.html',window.location.origin);url.searchParams.set('postingId',job.postingId);url.searchParams.set('mode',button.dataset.interviewMode);window.location.assign(url.href);});bindTaskToggles(job);const ask=async(mode,message)=>{const box=$('#messages');box.insertAdjacentHTML('beforeend',`<div class="message user">${safe(message)}</div><div class="message assistant" data-wait>공고 근거를 확인하고 있어요…</div>`);const wait=$('[data-wait]');try{const history=historyFor(keyOf(job));const tasks=taskItems();const out=await requestCoach({job,mode,message,profile:state.profile,currentTasks:tasks[keyOf(job)]||[],history});wait.textContent=out.answer;history.push({role:'user',content:message},{role:'assistant',content:out.answer});saveHistory(keyOf(job),history);if(mode==='timeline'){const next=(out.nextActions||[]).map((x,i)=>({...x,id:`${Date.now()}-${i}`,done:false}));tasks[keyOf(job)]=next;persistForSession(state.auth?'tasks':'guestTasks',tasks);$('#coach-tasks').innerHTML=next.map(t=>`<label class="aside-item"><input type="checkbox" ${t.done?'checked':''}> <strong>${safe(t.title)}</strong>${safe(t.reason||'')}</label>`).join('');bindTaskToggles(job);}}catch(error){wait.textContent=`AI 코치 요청 실패: ${error.code||error.message}`;}box.scrollTop=box.scrollHeight;};$$('[data-agent]').forEach(b=>b.onclick=()=>ask(b.dataset.agent,'마감일까지의 준비 일정을 제안해 줘.'));$('#chat-form').onsubmit=e=>{e.preventDefault();const input=$('#chat-input'),value=input.value.trim();if(value){input.value='';ask('consultation',value);}};}
+function bindCoach(){const job=state.selected||savedItems()[0];if(!job)return;if(job.userAdded)$$('[data-interview-mode]').forEach(b=>b.closest('.quick-action')?.remove()||b.remove());$$('[data-interview-mode]').forEach(button=>button.onclick=()=>{if(location.protocol==='file:')return toast('면접은 프로젝트 서버에서 실행해야 실제 분석 API를 사용할 수 있어요.');const url=new URL('/index.html',window.location.origin);url.searchParams.set('postingId',job.postingId);url.searchParams.set('mode',button.dataset.interviewMode);window.location.assign(url.href);});bindTaskToggles(job);const ask=async(mode,message)=>{const box=$('#messages');box.insertAdjacentHTML('beforeend',`<div class="message user">${safe(message)}</div><div class="message assistant" data-wait>공고 근거를 확인하고 있어요…</div>`);const wait=$('[data-wait]');try{const history=historyFor(keyOf(job));const tasks=taskItems();const out=await requestCoach({job,mode,message,profile:state.profile,currentTasks:tasks[keyOf(job)]||[],history});wait.textContent=out.answer;history.push({role:'user',content:message},{role:'assistant',content:out.answer});saveHistory(keyOf(job),history);if(mode==='timeline'){const next=(out.nextActions||[]).map((x,i)=>({...x,id:`${Date.now()}-${i}`,done:false}));tasks[keyOf(job)]=next;persistForSession(state.auth?'tasks':'guestTasks',tasks);$('#coach-tasks').innerHTML=next.map(t=>`<label class="aside-item"><input type="checkbox" ${t.done?'checked':''}> <strong>${safe(t.title)}</strong>${safe(t.reason||'')}</label>`).join('');bindTaskToggles(job);}}catch(error){wait.textContent=`AI 코치 요청 실패: ${error.code||error.message}`;}box.scrollTop=box.scrollHeight;};$$('[data-agent]').forEach(b=>b.onclick=()=>ask(b.dataset.agent,'마감일까지의 준비 일정을 제안해 줘.'));$('#chat-form').onsubmit=e=>{e.preventDefault();const input=$('#chat-input'),value=input.value.trim();if(value){input.value='';ask('consultation',value);}};}
 function bindEssay(){const job=state.selected||savedItems()[0];$('#essay-form').onsubmit=async e=>{e.preventDefault();const sections=$$('.essay-question').map((q,i)=>({question:q.value,answer:$$('.essay-answer')[i].value}));const drafts=draftItems();drafts[keyOf(job)]=sections;persistForSession(state.auth?'drafts':'guestDrafts',drafts);$('#essay-review').innerHTML='<div class="aside-item">AI 채용담당자가 초안을 읽고 있어요…</div>';try{const out=await requestEssayReview({job,sections,experiences:(state.profile.experiences||'').split(/\n+/)});const labels={strong:['강점','mint'],weak:['보완 필요','sun'],missing:['추가 작성 필요','coral']};$('#essay-review').innerHTML=out.items.map(x=>`<article class="review-item"><span class="badge ${labels[x.status]?.[1]||'sun'}">${labels[x.status]?.[0]||'검토'}</span><h4>${safe(x.label)}</h4><p>${safe(x.feedback)} ${safe(x.suggestion||'')}</p></article>`).join('');}catch(error){$('#essay-review').innerHTML=`<div class="alert error">자소서 심사 요청 실패: ${safe(error.code||error.message)}</div>`;}};}
 
 async function loadData(){try{const data=await loadCareerData();state.live=data.postings;state.contexts=data.contexts;state.dataSource=data.source;state.loadError='';}catch(error){state.live=[];state.contexts=[];state.dataSource='error';state.loadError=`공고 데이터를 불러오지 못했습니다: ${error.code||error.message}`;}render();}
