@@ -595,7 +595,9 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 404, { error: "not found" });
     }
 
-    const requested = url.pathname === "/" ? "/next-step.html" : url.pathname;
+    // 확장자 없는 문서 주소. 구글 OAuth 동의 화면에 넣는 링크라 깔끔한 편이 낫다.
+    const pages = { "/": "/next-step.html", "/privacy": "/privacy.html", "/terms": "/terms.html" };
+    const requested = pages[url.pathname] || url.pathname;
     const filePath = normalize(join(dist, requested));
     if (!filePath.startsWith(dist)) return sendJson(res, 403, { error: "FORBIDDEN" });
     const file = await readFile(filePath);

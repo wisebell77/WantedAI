@@ -1,0 +1,18 @@
+/* 약관·방침 공용. 앱 번들과 분리해 둔다 — 이 페이지들은 자바스크립트가 필요 없다. */
+:root { color-scheme: light dark; --bg:#0d0f14; --fg:#e8eaf0; --dim:#9aa3b2; --line:#232733; --accent:#7aa2ff; }
+@media (prefers-color-scheme: light) { :root { --bg:#fff; --fg:#1a1d24; --dim:#5b6472; --line:#e3e6ed; --accent:#2f5fd0; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.75 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif; }
+main { max-width: 740px; margin:0 auto; padding: 48px 20px 96px; }
+a { color: var(--accent); }
+h1 { font-size: 1.7rem; margin:0 0 6px; letter-spacing:-.01em; }
+h2 { font-size: 1.08rem; margin: 40px 0 10px; padding-top:20px; border-top:1px solid var(--line); }
+p, li { color: var(--fg); }
+ul { padding-left: 1.1em; }
+li { margin: 6px 0; }
+.sub { color: var(--dim); font-size:.92rem; margin:0 0 32px; }
+.back { display:inline-block; margin-bottom:28px; font-size:.92rem; text-decoration:none; }
+table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.95rem; }
+th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--dim); font-weight:600; white-space:nowrap; width:34%; }
+footer { margin-top:56px; padding-top:20px; border-top:1px solid var(--line); color:var(--dim); font-size:.9rem; }
