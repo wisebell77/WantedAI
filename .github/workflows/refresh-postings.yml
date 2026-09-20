@@ -39,7 +39,7 @@ jobs:
     #
     # 실제 제어는 **단계별 timeout** 이 한다. 그건 그 스텝만 끝내고 job 은 계속돼
     # 캐시도 남고 ⑦~⑨ 도 돈다. 여기 값은 무언가 정말 멈췄을 때만 걸리는 최후 방어선이다.
-    #   단계 합계 ② 30 + ③ 120 + ④ 45 + ⑤ 25 + ⑥ 40 = 260분 (+ 준비 6분)
+    #   단계 합계 ② 30 + ③ 120 + ④ 45 = 195분, ⑤⑥ 은 상한 없음 (+ 준비 6분)
     timeout-minutes: 330
 
     env:
@@ -140,7 +140,9 @@ jobs:
 
       - name: ⑤ 판독용 조각 준비
         continue-on-error: true
-        run: timeout 1500 python scripts/ocr_prep.py || echo '시간 상한 — 준비된 만큼만'
+        # 상한을 두지 않는다. 여기서 끊기면 조각이 반만 만들어진 공고가 생기고,
+        # ⑥ 이 그걸 읽어 반쪽짜리 본문을 저장한다. 끝까지 두는 편이 안전하다.
+        run: python scripts/ocr_prep.py
 
       - name: ⑥ 이미지 판독 (비전 모델)
         if: ${{ !inputs.skip_ocr }}
@@ -151,7 +153,9 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_FAST_MODEL: ${{ vars.LLM_FAST_MODEL }}
-        run: timeout 2400 python scripts/ocr_read.py || echo '시간 상한 — 판독된 만큼만'
+        # 상한을 두지 않는다. 공고 단위로 저장하므로 중간에 끊겨도 손해는 없지만,
+        # API 호출이라 다시 돌리면 그만큼 크레딧을 또 쓴다. 한 번에 끝내는 게 낫다.
+        run: python scripts/ocr_read.py
 
       - name: ⑦ 병합 + 직무 분해
         run: |

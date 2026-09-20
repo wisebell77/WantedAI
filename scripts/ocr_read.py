@@ -131,20 +131,29 @@ def ask(images: list[str], model: str, timeout: int) -> str:
 
 
 def read_posting(seq: str, entry: dict, *, model: str, batch: int,
-                 max_width: int, timeout: int, retries: int) -> str:
-    """한 공고의 조각들을 순서대로 읽어 이어 붙인다."""
+                 max_width: int, timeout: int, retries: int, head: str = "") -> str:
+    """한 공고의 조각들을 순서대로 읽어 이어 붙인다.
+
+    조각이 20 장 넘는 공고가 있어서 배치마다 찍는다. 공고 단위로만 찍으면
+    몇 분씩 아무 출력이 없어 멈춘 건지 도는 건지 구분이 안 된다.
+    """
     files = [chunk_path(f) for f in entry.get("files") or []]
     files = [f for f in files if f.exists()]
     if not files:
         return ""
     parts: list[str] = []
-    for i in range(0, len(files), batch):
+    groups = (len(files) + batch - 1) // batch
+    for gi, i in enumerate(range(0, len(files), batch), 1):
         group = [u for u in (encode(f, max_width) for f in files[i:i + batch]) if u]
         if not group:
             continue
+        t0 = time.time()
         for attempt in range(retries + 1):
             try:
-                parts.append(ask(group, model, timeout).strip())
+                got = ask(group, model, timeout).strip()
+                parts.append(got)
+                print(f"    {head}조각 {gi}/{groups}  {len(got):>5}자  {time.time()-t0:.0f}초",
+                      flush=True)
                 break
             except urllib.error.HTTPError as e:
                 detail = e.read().decode("utf-8", "replace")[:160]
@@ -210,28 +219,38 @@ def main() -> int:
     print(f"모델 {model} · 조각 {args.batch}개씩 · 폭 {args.max_width}px 로 축소\n")
 
     ok = short = fail = 0
+    started = time.time()
     for n, (seq, entry) in enumerate(todo, 1):
         head = f"[{n}/{len(todo)}] {seq} {str(entry.get('corp'))[:12]}"
+        print(f"  {head}  조각 {len(entry.get('files') or [])}장 판독 시작", flush=True)
+        t0 = time.time()
         text = read_posting(seq, entry, model=model, batch=args.batch,
                             max_width=args.max_width, timeout=args.timeout,
-                            retries=args.retries)
+                            retries=args.retries, head="")
+        took = time.time() - t0
+        # 남은 시간을 같이 찍는다. 로그를 중간에 들여다볼 때 "얼마나 더 걸리나"가
+        # 제일 궁금한데, 건수만 봐서는 알 수 없다.
+        rate = (time.time() - started) / n
+        eta = rate * (len(todo) - n)
+        tail = f"  ({took:.0f}초 · 남은 {len(todo)-n}건 약 {eta/60:.0f}분)"
         if not text:
-            print(f"  {head}  판독 실패")
+            print(f"  {head}  판독 실패{tail}", flush=True)
             fail += 1
             continue
         if len(text) < args.min_length:
             # 짧은 판독은 대개 표지·로고만 있는 조각이다. 남기면 usable() 을
             # 통과해 빈 공고가 코퍼스에 들어간다.
-            print(f"  {head}  {len(text)}자 — 너무 짧아 버린다")
+            print(f"  {head}  {len(text)}자 — 너무 짧아 버린다{tail}", flush=True)
             short += 1
             continue
         (OUT_DIR / f"{seq}.json").write_text(json.dumps(
             {"seq": seq, "text": text, "len": len(text), "src": "ocr"},
             ensure_ascii=False, indent=1), encoding="utf-8")
-        print(f"  {head}  {len(text)}자 저장")
+        print(f"  {head}  {len(text)}자 저장{tail}", flush=True)
         ok += 1
 
-    print(f"\n판독 {ok}건 · 너무 짧음 {short}건 · 실패 {fail}건")
+    print(f"\n판독 {ok}건 · 너무 짧음 {short}건 · 실패 {fail}건 "
+          f"· 전체 {(time.time()-started)/60:.0f}분")
     print("다음: python scripts/build_corpus.py  (또는 pipelines/refresh_private.py --merge-only)")
     return 0
 
