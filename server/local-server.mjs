@@ -30,6 +30,23 @@ try {
 const roles = JSON.parse(await readFile(join(dataDir, "roles.json"), "utf8"));
 const postings = JSON.parse(await readFile(join(dataDir, "jd_tiered.json"), "utf8"));
 const liveSource = JSON.parse(await readFile(join(dataDir, "gongchae_all.json"), "utf8"));
+
+// NCS 대분류 ↔ 민간 직무군 대응표.
+// 직무 추천은 NCS 소분류(정보기술개발 200102)로 말하고 실시간 공고는 민간 자체
+// 분류(개발/SW)로 말한다. 이을 키가 없어서 "이 직무와 겹친다"를 보고도 어느
+// 공고에 지원할지로 못 넘어갔다. 이 표가 그 다리다.
+//
+// 원본은 overlap/evaluate/cross.py 의 GOLD 이고, pipelines/export_ncs_map.py 가
+// 내보낸다. **여기에 표를 베껴 두면 반드시 어긋나므로** 파일만 읽는다.
+// 파일이 없으면 기능만 꺼지고 나머지는 그대로 돈다.
+let ncsMap = { major_to_jobs: {}, job_to_majors: {}, major_names: {} };
+try {
+  ncsMap = JSON.parse(await readFile(join(dataDir, "ncs_job_families.json"), "utf8"));
+} catch {
+  console.warn("ncs_job_families.json 없음 — NCS↔직무군 연결을 건너뛴다");
+}
+// 대분류는 2자리다. 소분류(200102)든 세분류(20010205)든 앞 2자리만 본다.
+const ncsJobsFor = (code) => ncsMap.major_to_jobs?.[String(code ?? "").slice(0, 2)] || [];
 const postingByUrl = new Map(postings.map((item) => [item.url, item]));
 const liveByUrl = new Map();
 for (const item of liveSource) {
@@ -117,7 +134,12 @@ const livePostings = liveSource.map((item) => {
     deadlineTime: item.empWantedEndtTime || null,
     sourceUrl: url,
     coachReady: Boolean(exact?.requiredSkills.length && exact?.responsibilities.length),
-    requiredSkills: exact?.requiredSkills || []
+    requiredSkills: exact?.requiredSkills || [],
+    // 이 공고가 걸리는 NCS 대분류. 직무군이 없으면(본문 미확보) 빈 배열이다 —
+    // 250건 중 141건이 그렇다. 본문 수집이 늘면 같이 줄어든다.
+    ncsMajors: ncsMap.job_to_majors?.[exact?.jobFamily] || [],
+    ncsMajorNames: (ncsMap.job_to_majors?.[exact?.jobFamily] || [])
+      .map((c) => ncsMap.major_names?.[c]).filter(Boolean)
   };
 }).sort((a, b) => String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")));
 
@@ -331,11 +353,28 @@ const server = createServer(async (req, res) => {
       const q = (url.searchParams.get("q") || "").toLowerCase();
       const days = Number(url.searchParams.get("days") || 0);
       const until = days ? new Date(new Date(`${today}T00:00:00Z`).getTime() + days * 86400000).toISOString().slice(0, 10) : null;
+      // 직무 추천 결과(NCS 소분류/세분류 코드)로 공고를 거른다.
+      // 200102(정보기술개발) → 20 정보통신 → 개발/SW · 데이터/AI · IT인프라/보안 · 연구개발
+      // 대분류까지만 이어진다 — 정보통신 안에서 개발/데이터/보안은 못 가른다.
+      const ncsCode = url.searchParams.get("ncsCode") || "";
+      const ncsJobs = ncsCode ? ncsJobsFor(ncsCode) : [];
       const items = livePostings.filter((item) => (!item.deadline || item.deadline >= today)
         && (!until || !item.deadline || item.deadline <= until)
         && (!job || item.jobFamily === job)
+        && (!ncsCode || ncsJobs.includes(item.jobFamily))
         && (!q || `${item.companyName} ${item.positionTitle} ${item.jobFamily}`.toLowerCase().includes(q)));
-      return sendJson(res, 200, { items, total: items.length, coachReady: items.filter((item) => item.coachReady).length, source: "gongchae_all.json" });
+      return sendJson(res, 200, {
+        items, total: items.length,
+        coachReady: items.filter((item) => item.coachReady).length,
+        source: "gongchae_all.json",
+        // 왜 이 목록이 나왔는지 화면이 설명할 수 있게 근거를 같이 준다.
+        // 빈 결과일 때 "연결된 직무군이 없다"와 "있는데 공고가 없다"를 구분해야 한다.
+        ncsFilter: ncsCode
+          ? { code: ncsCode, major: ncsCode.slice(0, 2),
+              majorName: ncsMap.major_names?.[ncsCode.slice(0, 2)] || "",
+              jobFamilies: ncsJobs }
+          : null
+      });
     }
     if (req.method === "GET" && url.pathname === "/api/v1/job-contexts") {
       const job = url.searchParams.get("job");
