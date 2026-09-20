@@ -6,9 +6,12 @@
 //
 // 세션은 여기 안 넣는다. 서명 쿠키(auth.mjs)라 세션 테이블이 필요 없다 —
 // 테이블이 하나 줄고, 만료 청소도 필요 없다.
+//
+// pg 를 **정적 import 하지 않는다.** 최상단에서 불러오면 컨테이너에 모듈이
+// 없을 때 ERR_MODULE_NOT_FOUND 로 서버가 기동조차 못 한다 — DB 부가 기능
+// 하나 때문에 진단·공고·코치가 전부 죽는다. 늦게 불러오고, 실패하면 삼킨다.
 
-import pg from "pg";
-
+let pgMod = null;
 let pool = null;
 let ready = null;        // 스키마 준비 Promise. 여러 요청이 동시에 와도 한 번만 돈다.
 let lastError = null;
@@ -17,9 +20,22 @@ export function configured() {
   return Boolean(process.env.DATABASE_URL);
 }
 
-function getPool() {
+async function loadPg() {
+  if (pgMod) return pgMod;
+  try {
+    pgMod = (await import("pg")).default;
+  } catch (e) {
+    lastError = new Error(`pg 모듈을 못 불러왔다 (npm 설치 누락?): ${e.message}`);
+    return null;
+  }
+  return pgMod;
+}
+
+async function getPool() {
   if (pool) return pool;
   if (!configured()) return null;
+  const pg = await loadPg();
+  if (!pg) return null;
   pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     // Railway 내부망은 인증서를 따로 주지 않는다. 외부에서 붙을 때만 SSL 이 필요하고
@@ -67,8 +83,8 @@ CREATE TABLE IF NOT EXISTS drafts (
 `;
 
 async function ensureSchema() {
-  const p = getPool();
-  if (!p) throw new Error("DATABASE_URL_MISSING");
+  const p = await getPool();
+  if (!p) throw new Error(lastErrorMessage() || "DATABASE_URL_MISSING");
   await p.query(SCHEMA);
   return true;
 }
@@ -91,8 +107,8 @@ export function lastErrorMessage() {
 }
 
 async function q(text, params) {
-  const p = getPool();
-  if (!p) throw new Error("DATABASE_URL_MISSING");
+  const p = await getPool();
+  if (!p) throw new Error(lastErrorMessage() || "DATABASE_URL_MISSING");
   return p.query(text, params);
 }
 

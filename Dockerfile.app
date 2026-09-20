@@ -21,6 +21,10 @@ RUN npm ci --no-audit --no-fund
 COPY src/ ./src/
 COPY dist/ ./dist/
 RUN npm run build
+# 번들을 구운 뒤 node_modules 를 런타임용(prod 전용)으로 다시 깐다.
+# 런타임 단계에서 npm 을 부르지 않는 이유: 데비안은 nodejs 와 npm 이 별개
+# 패키지라 거기엔 npm 이 없다. 여기(node:20-slim)에는 확실히 있다.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 
 # ── 2단계: 런타임. Python 이 무거운 쪽이라 python 을 베이스로 잡고 node 를 얹는다.
@@ -69,11 +73,9 @@ RUN mkdir -p /app/models && cd /app/models \
  && ls -l /app/models
 
 # ── 코드
-# 런타임 npm 의존성. 지금은 pg 하나뿐이다 — 세션은 서명 쿠키라 라이브러리가 없고,
-# 프론트 번들은 1단계에서 끝나 여기선 필요 없다.
-# --omit=dev 로 esbuild 는 빼고, 번들에 들어간 motion 도 런타임에는 안 쓴다.
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+# 런타임 의존성은 지금 pg 하나뿐이다 — 세션은 서명 쿠키라 라이브러리가 없고
+# 프론트 번들은 1단계에서 끝났다. pg 는 순수 JS 라 그대로 옮겨도 된다.
+COPY --from=frontend /build/node_modules /app/node_modules
 
 COPY server/ /app/server/
 COPY persona/ /app/persona/
