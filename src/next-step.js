@@ -173,7 +173,7 @@ function landing() {
       <h1><span class="landing-line">내 경험에서 시작하는</span><span class="landing-line accent">커리어의 다음 단계</span></h1>
       <p>흩어진 경험을 직무와 연결하고, 마음에 둔 공고부터<br>자소서와 면접까지 한 흐름으로 준비해요.</p>
       <div class="landing-actions"><button class="button primary" id="login-button">로그인하기</button><button class="button secondary" id="guest-button">로그인 없이 둘러보기</button></div>
-      <p class="landing-note">게스트도 모든 화면을 둘러볼 수 있어요. 기록 저장은 로그인 후 가능해요.<br><a href="/privacy" style="color:inherit">개인정보처리방침</a> · <a href="/terms" style="color:inherit">이용약관</a></p>
+      <p class="landing-note">게스트도 모든 화면을 둘러볼 수 있어요. 기록 저장은 로그인 후 가능해요.<br><a href="/privacy" style="color:inherit">개인정보처리방침</a> · <a href="/terms" style="color:inherit">이용약관</a><br><span style="opacity:.78">Published by 남궁현종, 김소연, 나예린, 배승민, 이근하</span></p>
     </section></div></main>`;
 }
 function openAuth(message="") {
