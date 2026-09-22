@@ -118,6 +118,54 @@ def count(path: str) -> int:
         return 0
 
 
+def step0_prepare() -> None:
+    """배포본을 스크립트가 기대하는 자리로 옮긴다.
+
+    수집 스크립트들이 Path("data/...") 를 하드코딩해 OVERLAP_DATA 를 보지 않는다.
+    이 단계를 빼면 ② 가 data/probe/gongchae_all.json 을 못 찾아 한 건도 안 받는다.
+    """
+    print(f"{chr(10)}{'=' * 62}{chr(10)}⓪ 작업 공간 준비{chr(10)}{'=' * 62}")
+    for d in ("data/jd", "data/jd_js", "data/ocr", "data/ocr_img", "data/probe"):
+        (ROOT / d).mkdir(parents=True, exist_ok=True)
+    pairs = [
+        ("data/overlap/gongchae_all.json", "data/gongchae_all.json"),
+        ("data/overlap/gongchae_all.json", "data/probe/gongchae_all.json"),
+        ("data/overlap/roles.json",        "data/roles.json"),
+        ("data/overlap/jd_tiered.json",    "data/jd_tiered.json"),
+        ("data/overlap/analysis.json",     "data/analysis.json"),
+        ("data/overlap/imgprobe.json",     "data/imgprobe.json"),
+        ("data/overlap/ocr_manifest.json", "data/ocr_manifest.json"),
+        (f"{PRIV}/jd_good.json",           "data/jd_good.json"),
+        (f"{PRIV}/corpus.json",            "data/corpus.json"),
+    ]
+    n = 0
+    for src, dst in pairs:
+        if (ROOT / src).exists():
+            shutil.copyfile(ROOT / src, ROOT / dst); n += 1
+    # 판독 결과는 덮어쓰지 않는다. 돈이 든 결과라 캐시에 더 최신이 있으면 그게 이긴다.
+    kept = 0
+    for f in glob.glob(str(ROOT / "data/overlap/ocr/*.json")):
+        dst = ROOT / "data/ocr" / Path(f).name
+        if not dst.exists():
+            shutil.copyfile(f, dst); kept += 1
+    print(f"  배포본 {n}개 복사 · 판독 결과 {kept}건 되살림")
+
+
+def sync_probe() -> None:
+    """① 이 갱신한 목록을 ② 가 읽는 자리로 옮긴다.
+
+    **이게 빠지면 파이프라인이 한 박자 늦게 돈다.** ① 은 data/gongchae_all.json 에
+    쓰고 ② 는 data/probe/gongchae_all.json 을 읽는다. 준비 단계가 복사해 둔 것은
+    갱신 **전** 목록이라, 이번에 새로 들어온 공고의 본문을 한 건도 안 받는다.
+    9/20 자동 실행에서 실제로 그랬다 — 공고는 542→639 로 늘었는데 본문은
+    291→286 으로 줄었고, 그래서 AI 코치 가능 건수가 그대로였다.
+    """
+    src = ROOT / "data/gongchae_all.json"
+    if src.exists():
+        shutil.copyfile(src, ROOT / "data/probe/gongchae_all.json")
+        print("  갱신된 목록을 data/probe/ 로 옮겼다 — ② 가 새 공고까지 받는다")
+
+
 def step1_list() -> None:
     """목록만 갱신한다 (병합은 ⑦)."""
     print(f"\n{'=' * 62}\n① 공채속보 목록 갱신\n{'=' * 62}", flush=True)
@@ -207,7 +255,9 @@ def main() -> int:
     load_env()
     started = time.time()
 
+    step0_prepare()
     step1_list()
+    sync_probe()
     # ②③④ 는 끊겨도 받은 만큼 쓴다. 외부 사이트가 느리거나 막는 건 흔한 일이라
     # 여기서 멈추면 아무것도 못 얻는다.
     run("② 본문 수집 (정적)", ["scripts/fetch_jd.py"])
