@@ -113,6 +113,19 @@ for (const item of contexts) {
   rows.push(item);
   contextByUrl.set(item.sourceUrl, rows);
 }
+// 마감일이 1년 넘게 남은 공고는 원본 오류로 본다. 채용공고에 그런 마감은 없다.
+// 경남에너지 '창원덕산 수소충전소 안전관리원 모집' 이 시작 2026-07-01 · 마감
+// 2036-07-10 으로 들어온다(연도 오타로 보인다). 10년 뒤라 날짜 필터를 그냥
+// 통과해 목록 맨 뒤에 영원히 남는다. 740건 중 이 한 건뿐이고 나머지는 전부
+// 올해 마감이다. **수집 데이터는 그대로 두고 보여줄 때만 걸러 낸다** —
+// 원본을 고치면 다음 수집에 되살아나고, 우리가 값을 지어낸 것이 된다.
+const SANE_DEADLINE_DAYS = 365;
+function saneDeadline(deadline) {
+  if (!deadline) return true;                       // 마감일 없음은 여기서 판단하지 않는다
+  const limit = new Date(Date.now() + SANE_DEADLINE_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+  return deadline <= limit;
+}
 const livePostings = liveSource.map((item) => {
   const url = item.empWantedHomepgDetail || item.empWantedMobileUrl || "";
   const matches = contextByUrl.get(url) || [];
@@ -143,7 +156,8 @@ const livePostings = liveSource.map((item) => {
     ncsMajorNames: (ncsMap.job_to_majors?.[exact?.jobFamily] || [])
       .map((c) => ncsMap.major_names?.[c]).filter(Boolean)
   };
-}).sort((a, b) => String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")));
+}).filter((item) => saneDeadline(item.deadline))
+  .sort((a, b) => String(a.deadline || "9999").localeCompare(String(b.deadline || "9999")));
 
 const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webp": "image/webp" };
 const sendJson = (res, status, body) => { res.writeHead(status, { "Content-Type": mime[".json"] }); res.end(JSON.stringify(body)); };
