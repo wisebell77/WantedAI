@@ -1,6 +1,5 @@
 """
 탈락분이 '이미지로 만든 공고'인지 조사한다.
-
 본문이 비어 있는 이유가 셋 중 무엇인지 가른다.
     (a) 공고 내용을 이미지로 붙여넣음  → OCR 로 살릴 수 있다
     (b) 대문/목록 URL                 → 공고 URL 자체가 없어 불가
@@ -11,10 +10,18 @@
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+
+# 브라우저 바이너리가 D 드라이브에 있다. fetch_jd_js.py 와 같은 처리를 해야
+# 하는데 여기에만 빠져 있었다 — 그래서 이 단계가 chromium 을 못 찾고 죽었고,
+# 이미지형 공고 판별이 통째로 건너뛰어졌다. 이미 환경변수가 있으면 그대로 따른다.
+if os.name == "nt" and os.path.isdir(r"D:\playwright-browsers"):
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", r"D:\playwright-browsers")
+
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 OUT = Path("data/imgprobe.json")
 MIN_W = 400          # 이보다 좁으면 로고·아이콘으로 본다
