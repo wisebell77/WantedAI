@@ -136,6 +136,12 @@ jobs:
           print(f"공채속보 total {d.total} / 누적 {d.stored}건 "
                 f"· 신규 {len(d.new)}건 · 목록에서 사라짐 {d.gone}건")
           PY
+            # **갱신한 목록을 ② 가 읽는 자리로 옮긴다.** 이게 없으면 파이프라인이
+            # 한 박자 늦게 돈다 — ① 은 data/gongchae_all.json 에 쓰는데 ② 는
+            # data/probe/gongchae_all.json 을 읽고, 그건 준비 단계가 복사한 갱신
+            # 전 목록이다. 9/20 실행에서 공고는 542→639 로 늘었는데 본문은
+            # 291→286 으로 줄었다. 새로 들어온 97건을 한 건도 안 받은 것이다.
+            cp data/gongchae_all.json data/probe/gongchae_all.json
 
       - name: ② 본문 수집 (static · robots.txt 준수)
         continue-on-error: true       # 일부 도메인이 막혀도 나머지는 살린다
