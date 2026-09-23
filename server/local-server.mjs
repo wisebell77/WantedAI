@@ -148,6 +148,12 @@ const livePostings = liveSource.map((item) => {
     deadline,
     deadlineTime: item.empWantedEndtTime || null,
     sourceUrl: url,
+    // **도구명 조건을 그대로 둔다.** requiredSkills(공고에 나온 도구 이름)를 빼면
+    // 코치 가능이 36 → 148건으로 늘지만, 새로 열리는 112건을 표본 조사하니 절반이
+    // 쓸 수 없었다 — 루브릭 항목에 'CJ CGV', '#CJCGV', '23 15:00' 같은 것이 올라온다.
+    // 기존(도구명 있는) 쪽은 '공격 탐지를 위한 데이터 분석 능력'처럼 멀쩡했다.
+    // 도구명이 JD 가 구조적으로 잘 쓰였는지를 가늠하는 대리 지표 역할을 하고 있다.
+    // 제대로 풀려면 루브릭에서 네비게이션·해시태그·시각 같은 항목을 걸러야 한다.
     coachReady: Boolean(exact?.requiredSkills.length && exact?.responsibilities.length),
     requiredSkills: exact?.requiredSkills || [],
     // 이 공고가 걸리는 NCS 대분류. 직무군이 없으면(본문 미확보) 빈 배열이다 —
