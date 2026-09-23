@@ -192,6 +192,10 @@ jobs:
           # post_tier 는 RoleSplitter 가 안 넣는다. 레거시 스크립트로 다시 만들어야
           # persona 의 load_roles(tier="A") 와 job_market() 이 산다.
           python scripts/split_roles.py
+          # jd_tiered 는 앱이 공고 본문을 읽는 유일한 통로다. 빼먹으면 본문을
+          # 아무리 모아도 앱은 지난번 것만 본다(실제로 221건에 멈춰 AI 코치가
+          # 17건에만 붙었다). split_roles 와 같은 입력(jd_good)을 쓴다.
+          python scripts/build_tiered.py
 
       - name: ⑧ 배포본으로 되돌리기 (줄어들면 반영하지 않는다)
         run: |

@@ -52,6 +52,7 @@ PAIRS = [
     ("data/roles.json",        "data/overlap/roles.json"),
     ("data/jd_good.json",      f"{PRIV}/jd_good.json"),
     ("data/corpus.json",       f"{PRIV}/corpus.json"),
+    ("data/jd_tiered.json",    "data/overlap/jd_tiered.json"),
 ]
 
 
@@ -289,6 +290,11 @@ def main() -> int:
     # post_tier 를 RoleSplitter 가 안 넣는다. 이걸 빼먹으면 persona 의
     # load_roles(tier="A") 가 0 개를 반환해 job_market() 의 시장 수요 가중치가 죽는다.
     run("⑦ 직무 분해 (post_tier 복구)", ["scripts/split_roles.py"], required=True)
+    # jd_tiered 는 앱이 공고 본문을 읽는 유일한 통로다. 이걸 빼먹으면 본문을
+    # 아무리 모아도 앱은 지난번 것만 본다 — 실제로 221건에 멈춰 있었고 그래서
+    # AI 코치가 17건에만 붙었다. split_roles 와 같은 입력(jd_good)을 쓰므로
+    # 순서는 상관없지만 같은 실행 안에서 반드시 같이 돈다.
+    run("⑦ 공고 본문 가공 (jd_tiered)", ["scripts/build_tiered.py"], required=True)
 
     summary(step8_apply())
     print(f"\n  전체 {(time.time() - started) / 60:.0f}분")
