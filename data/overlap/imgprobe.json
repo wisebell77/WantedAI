@@ -6,10 +6,26 @@
   "url": "https://www.redcross.or.kr/redrecruit/sharing.do?reNo=14578&seqNo=1",
   "len": 10707,
   "dom": "www.redcross.or.kr",
-  "img_total": 1,
-  "img_big": 0,
-  "biggest": [],
-  "text_len": 11447,
+  "img_total": 16,
+  "img_big": 9,
+  "biggest": [
+   {
+    "w": 1920,
+    "h": 960,
+    "src": "https://www.redcross.or.kr/redrecruit/rem/apply/common/images/main/main-visual03.png"
+   },
+   {
+    "w": 1920,
+    "h": 960,
+    "src": "https://www.redcross.or.kr/redrecruit/rem/apply/common/images/main/main-visual01.png"
+   },
+   {
+    "w": 1920,
+    "h": 960,
+    "src": "https://www.redcross.or.kr/redrecruit/rem/apply/common/images/main/main-visual02.png"
+   }
+  ],
+  "text_len": 2177,
   "tall": 0
  },
  {
@@ -43,16 +59,10 @@
   "url": "https://jeil.recruiter.co.kr/career/jobs/126733",
   "len": 4554,
   "dom": "jeil.recruiter.co.kr",
-  "img_total": 12,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 860,
-    "h": 948,
-    "src": "https://www.saraminimage.co.kr/recruit/bbs_recruit26/35_jeilpharm_top_260826.png"
-   }
-  ],
-  "text_len": 4670,
+  "img_total": 1,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -62,16 +72,10 @@
   "url": "https://jeil.recruiter.co.kr/career/jobs/126733",
   "len": 4554,
   "dom": "jeil.recruiter.co.kr",
-  "img_total": 12,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 860,
-    "h": 948,
-    "src": "https://www.saraminimage.co.kr/recruit/bbs_recruit26/35_jeilpharm_top_260826.png"
-   }
-  ],
-  "text_len": 4670,
+  "img_total": 1,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -81,16 +85,10 @@
   "url": "https://jeil.recruiter.co.kr/career/jobs/126733",
   "len": 4554,
   "dom": "jeil.recruiter.co.kr",
-  "img_total": 12,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 860,
-    "h": 948,
-    "src": "https://www.saraminimage.co.kr/recruit/bbs_recruit26/35_jeilpharm_top_260826.png"
-   }
-  ],
-  "text_len": 4670,
+  "img_total": 1,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -103,7 +101,7 @@
   "img_total": 2,
   "img_big": 0,
   "biggest": [],
-  "text_len": 906,
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -116,7 +114,7 @@
   "img_total": 2,
   "img_big": 0,
   "biggest": [],
-  "text_len": 906,
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -135,7 +133,7 @@
     "src": "https://www.korailretail.com/images/main/eService.png"
    }
   ],
-  "text_len": 1234,
+  "text_len": 1250,
   "tall": 0
  },
  {
@@ -148,7 +146,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 3855,
+  "text_len": 3865,
   "tall": 0
  },
  {
@@ -158,16 +156,10 @@
   "url": "https://careers.lg.com/apply/detail?id=1002075",
   "len": 3457,
   "dom": "careers.lg.com",
-  "img_total": 5,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 1052,
-    "h": 1488,
-    "src": "https://api.careers.lg.com/rmk/job/file/download/10181201/1002075"
-   }
-  ],
-  "text_len": 3788,
+  "img_total": 2,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -180,7 +172,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 3458,
+  "text_len": 3468,
   "tall": 0
  },
  {
@@ -275,17 +267,17 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
-    "w": 1335,
-    "h": 748,
-    "src": "https://www.hd.com/upload/files/2024/06/6e86585c-06ff-4cde-b4b2-068505458e45.PNG"
+    "w": 1280,
+    "h": 720,
+    "src": "https://www.hd.com/upload/files/2026/01/f0ba729c-4b1d-4d4a-802e-3a4e31376560.png"
    },
    {
     "w": 880,
     "h": 592,
-    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%82%AC%EC%9D%B4%ED%8A%B8%EC%86%94%EB%A3%A8%EC%85%98_%EA%B9%80%EB%AF%BC%ED%98%B8_440x296.jpg"
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%A7%88%EB%A6%B0%EC%86%94%EB%A3%A8%EC%85%98_%EA%B0%95%ED%83%9C%EA%B5%AC_440x296.jpg"
    }
   ],
-  "text_len": 517,
+  "text_len": 504,
   "tall": 1
  },
  {
@@ -298,7 +290,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -324,7 +316,7 @@
   "img_total": 2,
   "img_big": 0,
   "biggest": [],
-  "text_len": 906,
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -337,7 +329,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -350,7 +342,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -382,7 +374,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -395,7 +387,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -408,7 +400,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -421,7 +413,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -453,7 +445,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -466,7 +458,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -479,7 +471,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -492,7 +484,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -505,7 +497,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -544,7 +536,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -555,9 +547,15 @@
   "len": 2460,
   "dom": "kpgroup.recruiter.co.kr",
   "img_total": 1,
-  "img_big": 0,
-  "biggest": [],
-  "text_len": 2677,
+  "img_big": 1,
+  "biggest": [
+   {
+    "w": 2172,
+    "h": 724,
+    "src": "https://infra1-static.recruiter.co.kr/builder/2026/09/29/a00259c7-7665-4afb-9bc0-232add2cc5a3.png"
+   }
+  ],
+  "text_len": 2666,
   "tall": 0
  },
  {
@@ -567,10 +565,10 @@
   "url": "https://careers.hyundaigroup.com/jobs/RC20260828033768",
   "len": 2402,
   "dom": "careers.hyundaigroup.com",
-  "img_total": 13,
+  "img_total": 16,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1059,
+  "text_len": 1316,
   "tall": 0
  },
  {
@@ -583,7 +581,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -596,7 +594,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -609,7 +607,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -622,7 +620,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -635,7 +633,7 @@
   "img_total": 4,
   "img_big": 0,
   "biggest": [],
-  "text_len": 263,
+  "text_len": 239,
   "tall": 0
  },
  {
@@ -648,7 +646,7 @@
   "img_total": 2,
   "img_big": 0,
   "biggest": [],
-  "text_len": 906,
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -671,26 +669,10 @@
   "url": "https://huonsgroup.recruiter.co.kr/career/jobs/126478",
   "len": 2152,
   "dom": "huonsgroup.recruiter.co.kr",
-  "img_total": 9,
-  "img_big": 3,
-  "biggest": [
-   {
-    "w": 808,
-    "h": 769,
-    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202606/137d3c7a-862d-47cd-9368-f18554e74b48.png"
-   },
-   {
-    "w": 1269,
-    "h": 392,
-    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202307/4e4ffff6-9426-4c7b-8899-4e5aaf34a3f4.png"
-   },
-   {
-    "w": 1170,
-    "h": 331,
-    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202305/d190b086-803e-497a-86b1-b0ad446ec993.jpg"
-   }
-  ],
-  "text_len": 2384,
+  "img_total": 1,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -713,10 +695,10 @@
   "url": "https://careers.hyundaigroup.com/jobs/RC20260828033768",
   "len": 2113,
   "dom": "careers.hyundaigroup.com",
-  "img_total": 13,
+  "img_total": 16,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1059,
+  "text_len": 1316,
   "tall": 0
  },
  {
@@ -742,7 +724,7 @@
   "img_total": 0,
   "img_big": 0,
   "biggest": [],
-  "text_len": 2409,
+  "text_len": 1751,
   "tall": 0
  },
  {
@@ -755,7 +737,7 @@
   "img_total": 0,
   "img_big": 0,
   "biggest": [],
-  "text_len": 2409,
+  "text_len": 1751,
   "tall": 0
  },
  {
@@ -768,7 +750,7 @@
   "img_total": 0,
   "img_big": 0,
   "biggest": [],
-  "text_len": 2409,
+  "text_len": 1751,
   "tall": 0
  },
  {
@@ -825,17 +807,17 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
-    "w": 1920,
-    "h": 1080,
-    "src": "https://www.hd.com/upload/files/2025/04/76c376a0-c34a-428f-8c89-9a28832d2984.jpg"
+    "w": 1280,
+    "h": 720,
+    "src": "https://www.hd.com/upload/files/2025/05/fdc421bf-06c7-4956-9d07-4dc7db277c5b.png"
    },
    {
     "w": 880,
     "h": 592,
-    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%AF%B8%ED%8F%AC_%EC%8B%A0%EB%8F%99%ED%9D%AC_440x296.jpg"
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%82%AC%EC%9D%B4%ED%8A%B8%EC%86%94%EB%A3%A8%EC%85%98_%EC%9D%B4%EC%A0%95%ED%9B%88_440x296.jpg"
    }
   ],
-  "text_len": 512,
+  "text_len": 545,
   "tall": 1
  },
  {
@@ -848,7 +830,7 @@
   "img_total": 2,
   "img_big": 0,
   "biggest": [],
-  "text_len": 906,
+  "text_len": 867,
   "tall": 0
  },
  {
@@ -899,7 +881,7 @@
   "img_total": 48,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1869,
+  "text_len": 1698,
   "tall": 0
  },
  {
@@ -912,7 +894,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1731,
+  "text_len": 1741,
   "tall": 0
  },
  {
@@ -994,15 +976,9 @@
   "len": 1551,
   "dom": "logisall.recruiter.co.kr",
   "img_total": 1,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 2084,
-    "h": 671,
-    "src": "https://infra1-static.recruiter.co.kr/builder/2024/11/27/655ffdb9-9048-4b86-9556-5bc216fe96d7.png"
-   }
-  ],
-  "text_len": 1659,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -1015,7 +991,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1587,
+  "text_len": 1597,
   "tall": 0
  },
  {
@@ -1025,10 +1001,26 @@
   "url": "https://huonsgroup.recruiter.co.kr/career/jobs/125343",
   "len": 1529,
   "dom": "huonsgroup.recruiter.co.kr",
-  "img_total": 1,
-  "img_big": 0,
-  "biggest": [],
-  "text_len": 74,
+  "img_total": 12,
+  "img_big": 3,
+  "biggest": [
+   {
+    "w": 808,
+    "h": 769,
+    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202606/137d3c7a-862d-47cd-9368-f18554e74b48.png"
+   },
+   {
+    "w": 1269,
+    "h": 392,
+    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202307/4e4ffff6-9426-4c7b-8899-4e5aaf34a3f4.png"
+   },
+   {
+    "w": 1170,
+    "h": 331,
+    "src": "https://huonsgroup.recruiter.co.kr/upload/347433/image/202305/d190b086-803e-497a-86b1-b0ad446ec993.jpg"
+   }
+  ],
+  "text_len": 1714,
   "tall": 0
  },
  {
@@ -1086,7 +1078,7 @@
   "img_total": 3,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1540,
+  "text_len": 1550,
   "tall": 0
  },
  {
@@ -1319,7 +1311,7 @@
     "src": "https://recruit.hdec.co.kr/file_nas/ehr/images/editor/1790042907077.png"
    }
   ],
-  "text_len": 416,
+  "text_len": 345,
   "tall": 1
  },
  {
@@ -1332,7 +1324,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1236,
+  "text_len": 1246,
   "tall": 0
  },
  {
@@ -1358,7 +1350,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1224,
+  "text_len": 1234,
   "tall": 0
  },
  {
@@ -1409,7 +1401,7 @@
     "src": "https://recruit.kbs.co.kr/res/images/view_sample.jpg"
    }
   ],
-  "text_len": 1491,
+  "text_len": 1038,
   "tall": 0
  },
  {
@@ -1454,7 +1446,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 624,
+  "text_len": 619,
   "tall": 0
  },
  {
@@ -1534,7 +1526,7 @@
   "url": "https://recruit.kepco.co.kr:444/frt/main.do",
   "len": 1084,
   "dom": "recruit.kepco.co.kr:444",
-  "img_total": 27,
+  "img_total": 24,
   "img_big": 1,
   "biggest": [
    {
@@ -1543,7 +1535,7 @@
     "src": "https://recruit.kepco.co.kr:444/publish/frt/images/main/big_logo.png"
    }
   ],
-  "text_len": 1703,
+  "text_len": 1417,
   "tall": 0
  },
  {
@@ -1569,7 +1561,7 @@
   "img_total": 1,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1099,
+  "text_len": 1109,
   "tall": 0
  },
  {
@@ -1736,27 +1728,11 @@
   "url": "https://duksangroup.career.greetinghr.com/ko/o/233894",
   "len": 962,
   "dom": "duksangroup.career.greetinghr.com",
-  "img_total": 9,
-  "img_big": 8,
-  "biggest": [
-   {
-    "w": 800,
-    "h": 1600,
-    "src": "https://opening-attachments.greetinghr.com/2026-09-21/c899ecd1-cd36-4f10-840d-6fba2efd6e1d/%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A03P-+%EC%82%AC%EB%AC%B4%EC%A7%81+%EB%AA%A8%EC%A7%91+26.09.21.png"
-   },
-   {
-    "w": 800,
-    "h": 1600,
-    "src": "https://opening-attachments.greetinghr.com/2026-09-21/09d6f70e-7368-40b1-be29-8b84d97256db/%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A04P+%ED%94%84%EB%A1%9C%EC%84%B8%EC%8A%A4.png"
-   },
-   {
-    "w": 800,
-    "h": 1600,
-    "src": "https://opening-attachments.greetinghr.com/2026-09-21/c899ecd1-cd36-4f10-840d-6fba2efd6e1d/%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A03P-+%EC%82%AC%EB%AC%B4%EC%A7%81+%EB%AA%A8%EC%A7%91+26.09.21.png"
-   }
-  ],
-  "text_len": 314,
-  "tall": 4
+  "img_total": 0,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 76,
+  "tall": 0
  },
  {
   "seq": "177641",
@@ -1838,7 +1814,7 @@
     "src": "https://recruit.hdec.co.kr/file_nas/ehr/images/editor/1790042907077.png"
    }
   ],
-  "text_len": 416,
+  "text_len": 345,
   "tall": 1
  },
  {
@@ -1968,21 +1944,10 @@
   "url": "https://career.netmarble.com/announce/view?anno_id=1833",
   "len": 836,
   "dom": "career.netmarble.com",
-  "img_total": 19,
-  "img_big": 2,
-  "biggest": [
-   {
-    "w": 1890,
-    "h": 1063,
-    "src": "https://sgimage.netmarble.com/images/netmarble/common/20240705/1720146187027/banner-page-001.jpg"
-   },
-   {
-    "w": 998,
-    "h": 416,
-    "src": "https://sgimage.netmarble.com/images/netmarble/COMMON/20230427/6wpk1682584287740.jpg"
-   }
-  ],
-  "text_len": 873,
+  "img_total": 14,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 208,
   "tall": 0
  },
  {
@@ -2156,10 +2121,10 @@
   "url": "https://careers.hyundaigroup.com/jobs/RC20260908034169",
   "len": 751,
   "dom": "careers.hyundaigroup.com",
-  "img_total": 13,
+  "img_total": 16,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1059,
+  "text_len": 1316,
   "tall": 0
  },
  {
@@ -2219,10 +2184,10 @@
    {
     "w": 1280,
     "h": 720,
-    "src": "https://www.hd.com/upload/files/2024/06/711f726f-66c3-4bfb-8c2d-156eae146572.jpg"
+    "src": "https://www.hd.com/upload/files/2024/11/c39e3e9f-f990-4c88-878c-e595732b2781.jpg"
    }
   ],
-  "text_len": 459,
+  "text_len": 442,
   "tall": 1
  },
  {
@@ -2324,7 +2289,7 @@
     "src": "https://infra1-static.recruiter.co.kr/builder/2025/06/27/f67abdcd-04ea-4afc-915d-215291ba3b20.png"
    }
   ],
-  "text_len": 880,
+  "text_len": 878,
   "tall": 0
  },
  {
@@ -2348,7 +2313,7 @@
     "src": "https://infra1-static.recruiter.co.kr/builder/2026/03/09/f7b592d7-575b-4054-a80c-6b47b683206a.png"
    }
   ],
-  "text_len": 183,
+  "text_len": 1833,
   "tall": 1
  },
  {
@@ -2449,10 +2414,10 @@
   "url": "https://careers.hyundaigroup.com/jobs/RC20260821033480",
   "len": 614,
   "dom": "careers.hyundaigroup.com",
-  "img_total": 13,
+  "img_total": 16,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1059,
+  "text_len": 1316,
   "tall": 0
  },
  {
@@ -2482,15 +2447,9 @@
   "len": 595,
   "dom": "logisall.recruiter.co.kr",
   "img_total": 1,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 2084,
-    "h": 671,
-    "src": "https://infra1-static.recruiter.co.kr/builder/2024/11/27/655ffdb9-9048-4b86-9556-5bc216fe96d7.png"
-   }
-  ],
-  "text_len": 647,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -2500,17 +2459,11 @@
   "url": "https://orion.recruiter.co.kr/career/jobs/127662",
   "len": 591,
   "dom": "orion.recruiter.co.kr",
-  "img_total": 2,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 3543,
-    "h": 9331,
-    "src": "https://orion.recruiter.co.kr/upload/10822/image/202609/b6271cce-f6fa-496c-8238-088a4a3bb5e7.png"
-   }
-  ],
-  "text_len": 145,
-  "tall": 1
+  "img_total": 1,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
+  "tall": 0
  },
  {
   "seq": "176754",
@@ -2547,7 +2500,7 @@
     "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAADpsAABjUCAYAAACNKKiaAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAMsAAADLAAShkWtsAAP+lSURBVHhe7N13dBX3nf7xK4mODY7tNDvdKU4vmzi9Opuym+xuNkaoUwS2ce+44m"
    }
   ],
-  "text_len": 495,
+  "text_len": 491,
   "tall": 1
  },
  {
@@ -2714,15 +2667,9 @@
   "len": 502,
   "dom": "logisall.recruiter.co.kr",
   "img_total": 1,
-  "img_big": 1,
-  "biggest": [
-   {
-    "w": 2084,
-    "h": 671,
-    "src": "https://infra1-static.recruiter.co.kr/builder/2024/11/27/655ffdb9-9048-4b86-9556-5bc216fe96d7.png"
-   }
-  ],
-  "text_len": 539,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 74,
   "tall": 0
  },
  {
@@ -2745,8 +2692,8 @@
   "url": "https://recruit.hd.com/kr/mainLayout/applyDetail/264514",
   "len": 489,
   "dom": "recruit.hd.com",
-  "img_total": 73,
-  "img_big": 2,
+  "img_total": 74,
+  "img_big": 3,
   "biggest": [
    {
     "w": 1389,
@@ -2754,12 +2701,17 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
-    "w": 692,
-    "h": 390,
-    "src": "https://www.hd.com/upload/files/2025/08/ed06f00f-f26b-46ed-bf58-c66e02163a4c.jpg"
+    "w": 1920,
+    "h": 1080,
+    "src": "https://www.hd.com/upload/files/2024/07/15cd1bd1-fe29-437e-adc1-bd32982ccf0e.png"
+   },
+   {
+    "w": 880,
+    "h": 592,
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%AF%B8%ED%8F%AC_%EC%8B%A0%EB%8B%A4%EA%B7%A0_440x296.jpg"
    }
   ],
-  "text_len": 484,
+  "text_len": 568,
   "tall": 1
  },
  {
@@ -2802,18 +2754,18 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
-    "w": 1920,
-    "h": 1080,
-    "src": "https://www.hd.com/upload/files/2024/06/ea42dc8a-ed68-4c1c-809b-d590eb263c7e.png"
+    "w": 1080,
+    "h": 1920,
+    "src": "https://www.hd.com/upload/files/2026/07/4d7fe363-4a7b-4b5d-a626-707196d4592f.jpg"
    },
    {
     "w": 880,
     "h": 592,
-    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%9D%BC%EB%A0%89%ED%8A%B8%EB%A6%AD_%EC%9D%B4%EB%AF%B8%EB%9E%80_440x296.jpg"
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%AF%B8%ED%8F%AC_%EC%B5%9C%EC%84%B1%ED%98%84_440x296.jpg"
    }
   ],
-  "text_len": 518,
-  "tall": 1
+  "text_len": 515,
+  "tall": 2
  },
  {
   "seq": "177030",
@@ -2833,15 +2785,15 @@
    {
     "w": 1920,
     "h": 1080,
-    "src": "https://www.hd.com/upload/files/2026/06/3928a868-95d7-4c6d-b132-e39a024d5fe2.jpg"
+    "src": "https://www.hd.com/upload/files/2026/07/258339dd-f442-4ad9-af81-38b2e34802dd.jpg"
    },
    {
     "w": 880,
     "h": 592,
-    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%A7%88%EB%A6%B0%EC%86%94%EB%A3%A8%EC%85%98_%EC%9D%B4%EA%B4%91%EB%85%B8_440x296.jpg"
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%9D%BC%EB%A0%89%ED%8A%B8%EB%A6%AD_%EC%9D%B4%EB%AF%B8%EB%9E%80_440x296.jpg"
    }
   ],
-  "text_len": 493,
+  "text_len": 498,
   "tall": 1
  },
  {
@@ -2851,8 +2803,8 @@
   "url": "https://recruit.hd.com/kr/mainLayout/applyDetail/264514",
   "len": 474,
   "dom": "recruit.hd.com",
-  "img_total": 73,
-  "img_big": 2,
+  "img_total": 74,
+  "img_big": 3,
   "biggest": [
    {
     "w": 1389,
@@ -2860,12 +2812,17 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
+    "w": 880,
+    "h": 592,
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%A4%91%EA%B3%B5%EC%97%85_%EC%9E%84%EC%B1%84%EC%84%A0_440x296.jpg"
+   },
+   {
     "w": 640,
     "h": 480,
-    "src": "https://www.hd.com/upload/files/2026/09/c37a27cd-4020-4c2d-9ef3-eeb7e784df38.jpg"
+    "src": "https://www.hd.com/upload/files/2026/09/0b4875a2-a32f-4bfe-94d2-0ee293b63592.jpg"
    }
   ],
-  "text_len": 471,
+  "text_len": 569,
   "tall": 1
  },
  {
@@ -2884,17 +2841,17 @@
     "src": "https://hd.recruiter.co.kr/upload/381574/image/202609/828f0f36-d423-40dd-bfbf-0f56a777e9f1.jpg"
    },
    {
-    "w": 1920,
-    "h": 1080,
-    "src": "https://www.hd.com/upload/files/2026/07/6e1e9e6b-7ec8-404d-959b-82c4c6db3922.png"
+    "w": 1280,
+    "h": 720,
+    "src": "https://www.hd.com/upload/files/2025/10/479d875e-0c10-4a50-9eff-5e20cb67c0c0.jpg"
    },
    {
     "w": 880,
     "h": 592,
-    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EC%A4%91%EA%B3%B5%EC%97%85_%EC%9E%84%EC%B1%84%EC%84%A0_440x296.jpg"
+    "src": "https://recruit.hd.com/hdcareer/uploads/jobInterView/HD%ED%98%84%EB%8C%80%EB%AF%B8%ED%8F%AC_%EA%B9%80%EB%B3%91%EA%B5%AD_440x296.jpg"
    }
   ],
-  "text_len": 521,
+  "text_len": 554,
   "tall": 1
  },
  {
@@ -3002,27 +2959,11 @@
   "url": "https://duksangroup.career.greetinghr.com/ko/o/233936",
   "len": 425,
   "dom": "duksangroup.career.greetinghr.com",
-  "img_total": 5,
-  "img_big": 4,
-  "biggest": [
-   {
-    "w": 800,
-    "h": 3200,
-    "src": "https://opening-attachments.greetinghr.com/2026-09-21/03173be4-50a8-4adc-a37c-92f38eb9ccdd/%EC%97%B0%EA%B5%AC%EC%A7%81+2P_09.22.png"
-   },
-   {
-    "w": 800,
-    "h": 3200,
-    "src": "https://opening-attachments.greetinghr.com/2026-09-21/03173be4-50a8-4adc-a37c-92f38eb9ccdd/%EC%97%B0%EA%B5%AC%EC%A7%81+2P_09.22.png"
-   },
-   {
-    "w": 800,
-    "h": 900,
-    "src": "https://opening-attachments.greetinghr.com/2026-08-21/82784469-c8e4-4e33-ace6-0392e74999e8/%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0-1P+%282026%29.png"
-   }
-  ],
-  "text_len": 232,
-  "tall": 2
+  "img_total": 0,
+  "img_big": 0,
+  "biggest": [],
+  "text_len": 76,
+  "tall": 0
  },
  {
   "seq": "177740",
@@ -3040,7 +2981,7 @@
     "src": "https://recruit.hdec.co.kr/file_nas/ehr/images/editor/1790042907077.png"
    }
   ],
-  "text_len": 416,
+  "text_len": 345,
   "tall": 1
  },
  {
@@ -3098,7 +3039,7 @@
   "url": "https://www.hansol-recruit.com/jobs/RC20260825033597",
   "len": 397,
   "dom": "www.hansol-recruit.com",
-  "img_total": 19,
+  "img_total": 24,
   "img_big": 1,
   "biggest": [
    {
@@ -3107,7 +3048,7 @@
     "src": "https://img.inhr.co.kr/static/careerlink/DSGN/250311092314736qEA.jpg"
    }
   ],
-  "text_len": 1810,
+  "text_len": 2285,
   "tall": 0
  },
  {
@@ -3117,7 +3058,7 @@
   "url": "https://www.hansol-recruit.com/jobs/RC20260825033590",
   "len": 397,
   "dom": "www.hansol-recruit.com",
-  "img_total": 19,
+  "img_total": 24,
   "img_big": 1,
   "biggest": [
    {
@@ -3126,7 +3067,7 @@
     "src": "https://img.inhr.co.kr/static/careerlink/DSGN/250311092314736qEA.jpg"
    }
   ],
-  "text_len": 1810,
+  "text_len": 2285,
   "tall": 0
  },
  {
@@ -3311,10 +3252,10 @@
   "url": "https://careers.hyundaigroup.com/jobs/RC20260825033581",
   "len": 367,
   "dom": "careers.hyundaigroup.com",
-  "img_total": 13,
+  "img_total": 16,
   "img_big": 0,
   "biggest": [],
-  "text_len": 1059,
+  "text_len": 1316,
   "tall": 0
  },
  {
@@ -3607,7 +3548,7 @@
     "src": "https://cosmax.recruiter.co.kr/upload/3960/image/202609/5f16666b-8970-462e-8922-4962777a5fea.png"
    }
   ],
-  "text_len": 151,
+  "text_len": 161,
   "tall": 0
  },
  {
@@ -3631,7 +3572,7 @@
     "src": "https://cosmax.recruiter.co.kr/upload/3960/image/202609/dd8b39b1-25ff-4127-8eec-a41f6a962d62.png"
    }
   ],
-  "text_len": 150,
+  "text_len": 160,
   "tall": 0
  },
  {
@@ -3655,7 +3596,7 @@
     "src": "https://cosmax.recruiter.co.kr/upload/3960/image/202609/70f61150-6c10-49b7-9457-9efde4ccb10d.png"
    }
   ],
-  "text_len": 150,
+  "text_len": 160,
   "tall": 0
  },
  {
@@ -3679,7 +3620,7 @@
     "src": "https://cosmax.recruiter.co.kr/upload/3960/image/202609/c0988d85-1f98-49ff-9bcf-81d69dda5114.png"
    }
   ],
-  "text_len": 150,
+  "text_len": 160,
   "tall": 0
  },
  {
@@ -3703,7 +3644,7 @@
     "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA4QAAAXoCAIAAABqypJ3AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAJOgAACToAYJjBRwAAP+lSURBVHhe7J0HYBRF24CVXiIlJJdLwEYNIaSX6y2hiH6oiIqIFT/gR0RFrCD6KS"
    }
   ],
-  "text_len": 143,
+  "text_len": 153,
   "tall": 1
  },
  {
@@ -3724,10 +3665,10 @@
    {
     "w": 1280,
     "h": 720,
-    "src": "https://www.hd.com/upload/files/2025/07/037ab3df-4bb8-40d6-8e72-d0cf3071f7ba.png"
+    "src": "https://www.hd.com/upload/files/2025/10/83322217-25c7-4552-ac04-9e36de4671dc.jpg"
    }
   ],
-  "text_len": 478,
+  "text_len": 491,
   "tall": 1
  },
  {
